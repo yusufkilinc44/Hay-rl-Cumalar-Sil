@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Süpürge sapı -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M64,18 L70,24 L48,52 L42,46 Z" />
+    <!-- Süpürge başı -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M42,46 L54,58 C48,70 32,76 24,68 C32,63 38,55 42,46 Z" />
+    <!-- Büyük pırıltı -->
+    <path
+        android:fillColor="#FFFFD54F"
+        android:pathData="M76,56 L79,64 L87,67 L79,70 L76,78 L73,70 L65,67 L73,64 Z" />
+    <!-- Küçük pırıltı -->
+    <path
+        android:fillColor="#FFFF80AB"
+        android:pathData="M30,26 L32,31 L37,33 L32,35 L30,40 L28,35 L23,33 L28,31 Z" />
+</vector>
