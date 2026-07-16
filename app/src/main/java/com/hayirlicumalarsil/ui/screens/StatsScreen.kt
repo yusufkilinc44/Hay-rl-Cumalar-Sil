@@ -11,15 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.BarChart
-import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.DocumentScanner
-import androidx.compose.material.icons.rounded.Image
-import androidx.compose.material.icons.rounded.Savings
-import androidx.compose.material.icons.rounded.Scale
-import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -30,10 +21,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hayirlicumalarsil.R
 import com.hayirlicumalarsil.ScanViewModel
 import com.hayirlicumalarsil.formatBytes
 import com.hayirlicumalarsil.ui.components.WeeklyBarChart
@@ -58,7 +51,7 @@ fun StatsScreen(vm: ScanViewModel) {
 
         StatRow {
             StatCard(
-                icon = Icons.Rounded.Delete,
+                icon = R.drawable.ic_delete,
                 value = stats.totalDeleted.toString(),
                 label = "Toplam silinen görsel",
                 container = MaterialTheme.colorScheme.primaryContainer,
@@ -66,7 +59,7 @@ fun StatsScreen(vm: ScanViewModel) {
                 modifier = Modifier.weight(1f),
             )
             StatCard(
-                icon = Icons.Rounded.Savings,
+                icon = R.drawable.ic_savings,
                 value = formatBytes(stats.totalBytesFreed),
                 label = "Toplam kazanılan alan",
                 container = MaterialTheme.colorScheme.tertiaryContainer,
@@ -76,7 +69,7 @@ fun StatsScreen(vm: ScanViewModel) {
         }
         StatRow {
             StatCard(
-                icon = Icons.Rounded.DocumentScanner,
+                icon = R.drawable.ic_scan,
                 value = stats.totalScans.toString(),
                 label = "Yapılan tarama",
                 container = MaterialTheme.colorScheme.secondaryContainer,
@@ -84,7 +77,7 @@ fun StatsScreen(vm: ScanViewModel) {
                 modifier = Modifier.weight(1f),
             )
             StatCard(
-                icon = Icons.Rounded.Image,
+                icon = R.drawable.ic_photo,
                 value = stats.totalScannedFiles.toString(),
                 label = "Taranan görsel",
                 container = MaterialTheme.colorScheme.surfaceVariant,
@@ -94,7 +87,7 @@ fun StatsScreen(vm: ScanViewModel) {
         }
         StatRow {
             StatCard(
-                icon = Icons.Rounded.TrendingUp,
+                emoji = "📈",
                 value = "${stats.thisWeekDeleted} • ${formatBytes(stats.thisWeekBytes)}",
                 label = "Bu hafta silinen",
                 container = MaterialTheme.colorScheme.primaryContainer,
@@ -102,7 +95,7 @@ fun StatsScreen(vm: ScanViewModel) {
                 modifier = Modifier.weight(1f),
             )
             StatCard(
-                icon = Icons.Rounded.CalendarMonth,
+                emoji = "📅",
                 value = "${stats.thisMonthDeleted} • ${formatBytes(stats.thisMonthBytes)}",
                 label = "Bu ay silinen",
                 container = MaterialTheme.colorScheme.secondaryContainer,
@@ -112,7 +105,7 @@ fun StatsScreen(vm: ScanViewModel) {
         }
         StatRow {
             StatCard(
-                icon = Icons.Rounded.Scale,
+                emoji = "⚖️",
                 value = formatBytes(stats.averageFileBytes),
                 label = "Ortalama görsel boyutu",
                 container = MaterialTheme.colorScheme.tertiaryContainer,
@@ -120,7 +113,7 @@ fun StatsScreen(vm: ScanViewModel) {
                 modifier = Modifier.weight(1f),
             )
             StatCard(
-                icon = Icons.Rounded.BarChart,
+                icon = R.drawable.ic_bar_chart,
                 value = formatBytes(stats.largestFileBytes),
                 label = stats.largestFileName?.let { "En büyük: $it" } ?: "En büyük silinen dosya",
                 container = MaterialTheme.colorScheme.surfaceVariant,
@@ -171,12 +164,13 @@ private fun StatRow(content: @Composable androidx.compose.foundation.layout.RowS
 
 @Composable
 private fun StatCard(
-    icon: ImageVector,
     value: String,
     label: String,
     container: Color,
     content: Color,
     modifier: Modifier = Modifier,
+    icon: Int? = null,
+    emoji: String? = null,
 ) {
     Card(
         modifier = modifier,
@@ -184,7 +178,11 @@ private fun StatCard(
         colors = CardDefaults.cardColors(containerColor = container, contentColor = content),
     ) {
         Column(Modifier.padding(16.dp)) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+            if (icon != null) {
+                Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(22.dp))
+            } else if (emoji != null) {
+                Text(text = emoji, fontSize = 20.sp)
+            }
             Spacer(Modifier.height(8.dp))
             Text(
                 text = value,

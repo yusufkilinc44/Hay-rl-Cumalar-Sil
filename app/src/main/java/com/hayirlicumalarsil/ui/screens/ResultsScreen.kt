@@ -29,10 +29,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -54,11 +50,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.hayirlicumalarsil.R
 import com.hayirlicumalarsil.ScanState
 import com.hayirlicumalarsil.ScanViewModel
 import com.hayirlicumalarsil.detection.Candidate
@@ -152,7 +150,7 @@ fun ResultsScreen(vm: ScanViewModel) {
                 contentColor = MaterialTheme.colorScheme.onError,
             ),
         ) {
-            Icon(Icons.Rounded.Delete, contentDescription = null)
+            Icon(painterResource(R.drawable.ic_delete), contentDescription = null)
             Spacer(Modifier.size(8.dp))
             Text(
                 text = if (selectedCandidates.isEmpty()) "Silinecek görsel seç"
@@ -204,7 +202,9 @@ private fun CandidateCell(
                 .padding(6.dp),
         )
         Icon(
-            imageVector = if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+            painter = painterResource(
+                if (selected) R.drawable.ic_check_circle else R.drawable.ic_radio_unchecked
+            ),
             contentDescription = if (selected) "Seçili" else "Seçili değil",
             tint = if (selected) MaterialTheme.colorScheme.primary else Color.White,
             modifier = Modifier

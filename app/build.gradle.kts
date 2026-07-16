@@ -13,13 +13,37 @@ android {
         applicationId = "com.hayirlicumalarsil"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
+    }
+
+    // ML Kit her CPU mimarisi için ayrı native kütüphane taşıyor; neredeyse tüm
+    // güncel telefonlar arm64-v8a olduğundan yalnızca onu üreterek APK boyutunu
+    // ciddi ölçüde küçültüyoruz.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a")
+            isUniversalApk = false
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+        debug {
+            // Test/APK dağıtımı için üretilen debug build'de de kullanılmayan
+            // kod ve kaynakları eleriz; isDebuggable true kaldığı için normal
+            // log/hata ayıklama akışı etkilenmez.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -51,7 +75,6 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
 

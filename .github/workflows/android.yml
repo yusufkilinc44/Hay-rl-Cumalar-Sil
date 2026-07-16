@@ -34,8 +34,9 @@ jobs:
           META=app/build/outputs/apk/debug/output-metadata.json
           VN=$(jq -r '.elements[0].versionName' "$META")
           VC=$(jq -r '.elements[0].versionCode' "$META")
+          SRC=$(jq -r '.elements[0].outputFile' "$META")
           NAME="HayirliCumalarSil-v${VN}-b${VC}.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "$NAME"
+          cp "app/build/outputs/apk/debug/$SRC" "$NAME"
           SIZE=$(du -h "$NAME" | cut -f1)
           {
             echo "name=$NAME"

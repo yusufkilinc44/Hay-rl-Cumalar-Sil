@@ -29,11 +29,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CleaningServices
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Photo
-import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -52,12 +47,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hayirlicumalarsil.R
 import com.hayirlicumalarsil.ScanState
 import com.hayirlicumalarsil.ScanViewModel
 import com.hayirlicumalarsil.formatBytes
@@ -132,12 +128,12 @@ fun HomeScreen(vm: ScanViewModel, onGoResults: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 HeroStat(
-                    icon = Icons.Rounded.Delete,
+                    icon = R.drawable.ic_delete,
                     value = stats.totalDeleted,
                     label = "Toplam silinen",
                 )
                 HeroStat(
-                    icon = Icons.Rounded.Savings,
+                    icon = R.drawable.ic_savings,
                     valueText = formatBytes(stats.totalBytesFreed),
                     label = "Kazanılan alan",
                 )
@@ -174,7 +170,7 @@ fun HomeScreen(vm: ScanViewModel, onGoResults: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
-                                Icons.Rounded.Photo,
+                                painterResource(R.drawable.ic_photo),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onTertiaryContainer,
                             )
@@ -218,13 +214,13 @@ fun HomeScreen(vm: ScanViewModel, onGoResults: () -> Unit) {
 
 @Composable
 private fun HeroStat(
-    icon: ImageVector,
+    icon: Int,
     label: String,
     value: Int? = null,
     valueText: String? = null,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, contentDescription = null, tint = Color.White)
+        Icon(painterResource(icon), contentDescription = null, tint = Color.White)
         Spacer(Modifier.height(6.dp))
         if (value != null) {
             AnimatedCountText(
@@ -278,7 +274,7 @@ private fun ScanButton(onClick: () -> Unit) {
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
-                    Icons.Rounded.CleaningServices,
+                    painterResource(R.drawable.ic_scan),
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(52.dp),

@@ -12,11 +12,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.BarChart
-import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.Photo
-import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -33,7 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hayirlicumalarsil.ui.screens.HomeScreen
@@ -54,13 +49,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private data class TabItem(val title: String, val icon: ImageVector)
+private data class TabItem(val title: String, val icon: Int)
 
 private val Tabs = listOf(
-    TabItem("Ana Sayfa", Icons.Rounded.Home),
-    TabItem("Sonuçlar", Icons.Rounded.Photo),
-    TabItem("İstatistik", Icons.Rounded.BarChart),
-    TabItem("Ayarlar", Icons.Rounded.Settings),
+    TabItem("Ana Sayfa", R.drawable.ic_home),
+    TabItem("Sonuçlar", R.drawable.ic_photo),
+    TabItem("İstatistik", R.drawable.ic_bar_chart),
+    TabItem("Ayarlar", R.drawable.ic_settings),
 )
 
 @Composable
@@ -92,10 +87,10 @@ fun MainScreen(vm: ScanViewModel = viewModel()) {
                                 BadgedBox(
                                     badge = { Badge { Text(vm.candidates.size.toString()) } }
                                 ) {
-                                    Icon(tab.icon, contentDescription = tab.title)
+                                    Icon(painterResource(tab.icon), contentDescription = tab.title)
                                 }
                             } else {
-                                Icon(tab.icon, contentDescription = tab.title)
+                                Icon(painterResource(tab.icon), contentDescription = tab.title)
                             }
                         },
                     )
