@@ -28,8 +28,79 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Rename APK with version
+        id: apk
+        run: |
+          META=app/build/outputs/apk/debug/output-metadata.json
+          VN=$(jq -r '.elements[0].versionName' "$META")
+          VC=$(jq -r '.elements[0].versionCode' "$META")
+          NAME="HayirliCumalarSil-v${VN}-b${VC}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$NAME"
+          SIZE=$(du -h "$NAME" | cut -f1)
+          {
+            echo "name=$NAME"
+            echo "version=$VN"
+            echo "build=$VC"
+            echo "size=$SIZE"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
           name: hayirli-cumalar-sil-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ steps.apk.outputs.name }}
+
+      # "Android Apps" klasörüne yükleme. GDRIVE_SA_KEY ve GDRIVE_FOLDER_ID
+      # secrets'ları tanımlı değilse adım hata vermeden atlanır.
+      - name: Upload APK to Google Drive
+        id: gdrive
+        if: github.event_name != 'pull_request'
+        env:
+          GDRIVE_SA_KEY: ${{ secrets.GDRIVE_SA_KEY }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          APK_NAME: ${{ steps.apk.outputs.name }}
+        run: |
+          if [ -z "$GDRIVE_SA_KEY" ] || [ -z "$GDRIVE_FOLDER_ID" ]; then
+            echo "uploaded=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GDRIVE_SA_KEY / GDRIVE_FOLDER_ID secrets tanimli degil; Google Drive yuklemesi atlandi."
+            exit 0
+          fi
+          curl -fsSL https://rclone.org/install.sh | sudo bash
+          printf '%s' "$GDRIVE_SA_KEY" > /tmp/sa.json
+          REMOTE=":drive,service_account_file=/tmp/sa.json,root_folder_id=${GDRIVE_FOLDER_ID}:"
+          rclone copyto "$APK_NAME" "${REMOTE}${APK_NAME}"
+          LINK=$(rclone link "${REMOTE}${APK_NAME}" 2>/dev/null || true)
+          {
+            echo "uploaded=true"
+            echo "link=$LINK"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send ntfy notification
+        if: success() && github.event_name != 'pull_request'
+        env:
+          APK_VERSION: ${{ steps.apk.outputs.version }}
+          APK_BUILD: ${{ steps.apk.outputs.build }}
+          APK_SIZE: ${{ steps.apk.outputs.size }}
+          UPLOADED: ${{ steps.gdrive.outputs.uploaded }}
+          DRIVE_LINK: ${{ steps.gdrive.outputs.link }}
+        run: |
+          if [ "$UPLOADED" = "true" ]; then
+            MSG="Yeni APK hazır: v${APK_VERSION} (build ${APK_BUILD}, ${APK_SIZE}) Google Drive'daki 'Android Apps' klasörüne yüklendi. ✅"
+            [ -n "$DRIVE_LINK" ] && MSG="$MSG İndir: $DRIVE_LINK"
+          else
+            MSG="Yeni APK hazır: v${APK_VERSION} (build ${APK_BUILD}, ${APK_SIZE}). Google Drive yüklemesi atlandı — GDRIVE_SA_KEY ve GDRIVE_FOLDER_ID secrets'larını ekleyince otomatik yüklenecek. APK şimdilik GitHub Actions artifact'ında."
+          fi
+          curl -fsS \
+            -H "Title: Hayirli Cumalar Sil - yeni APK" \
+            -H "Tags: white_check_mark,package" \
+            -d "$MSG" \
+            https://ntfy.sh/hayirli-cumalar-sil
+
+      - name: Send ntfy failure notification
+        if: failure() && github.event_name != 'pull_request'
+        run: |
+          curl -fsS \
+            -H "Title: Hayirli Cumalar Sil - build HATASI" \
+            -H "Tags: x,rotating_light" \
+            -d "CI derlemesi başarısız oldu: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            https://ntfy.sh/hayirli-cumalar-sil || true

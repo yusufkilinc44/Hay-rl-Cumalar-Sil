@@ -32,7 +32,34 @@ görsellerini otomatik tespit eden ve **sizin onayınızla** silen, tamamen ciha
 ```
 
 APK `app/build/outputs/apk/debug/app-debug.apk` yoluna üretilir. Her push'ta GitHub
-Actions da APK üretip artifact olarak yükler.
+Actions da APK üretip artifact olarak yükler, ayrıca `hayirli-cumalar-sil` ntfy
+konusuna bildirim gönderir.
+
+## Google Drive'a otomatik yükleme kurulumu (tek seferlik)
+
+CI, her build'de APK'yı Drive'daki **Android Apps** klasörüne yükleyebilir. Bunun
+için iki secret gerekir:
+
+1. [Google Cloud Console](https://console.cloud.google.com)'da bir proje açın ve
+   **Google Drive API**'yi etkinleştirin.
+2. **IAM → Service Accounts**'tan bir servis hesabı oluşturun, **JSON anahtar**
+   indirin.
+3. Drive'da "Android Apps" klasörünü servis hesabının e-posta adresiyle
+   (`...@...iam.gserviceaccount.com`) **Düzenleyici** yetkisiyle paylaşın.
+4. Klasör ID'sini kopyalayın: `https://drive.google.com/drive/folders/<ID>`
+5. GitHub'da depo → **Settings → Secrets and variables → Actions** altına ekleyin:
+   - `GDRIVE_SA_KEY`: indirdiğiniz JSON dosyasının tüm içeriği
+   - `GDRIVE_FOLDER_ID`: klasör ID'si
+
+Secrets eklenene kadar Drive yüklemesi sessizce atlanır; derleme ve ntfy bildirimi
+çalışmaya devam eder.
+
+## Bildirimler (ntfy)
+
+Telefonunuza [ntfy](https://ntfy.sh) uygulamasını kurup `hayirli-cumalar-sil`
+konusuna abone olun. Her başarılı build'de sürüm/boyut/Drive linki içeren, hatalı
+build'de uyarı içeren bildirim gelir. Not: ntfy.sh konuları herkese açıktır —
+konu adını bilen herkes bildirimleri görebilir.
 
 ## Gereksinimler
 
