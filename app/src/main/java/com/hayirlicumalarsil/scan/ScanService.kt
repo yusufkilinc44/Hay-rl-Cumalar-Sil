@@ -66,18 +66,21 @@ class ScanService : LifecycleService() {
 
     private fun updateNotification(state: ScanState.Scanning) {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(NOTIF_ID, buildNotification(state.scanned, state.total, state.found))
+        nm.notify(NOTIF_ID, buildNotification(state.scanned, state.total, state.found, state.skipped))
     }
 
-    private fun buildNotification(scanned: Int, total: Int, found: Int) =
+    private fun buildNotification(scanned: Int, total: Int, found: Int, skipped: Int = 0) =
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(
                 if (total > 0) "Taranıyor: $scanned / $total görsel"
                 else "Görseller taranıyor"
             )
             .setContentText(
-                if (total > 0) "$found cuma görseli adayı bulundu"
-                else "Görseller listeleniyor…"
+                when {
+                    total <= 0 -> "Görseller listeleniyor…"
+                    skipped > 0 -> "$found aday • $skipped görsel atlandı (önceden tarandı)"
+                    else -> "$found cuma görseli adayı bulundu"
+                }
             )
             .setSmallIcon(R.drawable.ic_scan)
             .setOngoing(true)

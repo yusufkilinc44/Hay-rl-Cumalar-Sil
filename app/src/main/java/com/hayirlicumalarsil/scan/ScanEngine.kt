@@ -59,12 +59,15 @@ object ScanEngine {
             _state.value = ScanState.Scanning(0, images.size, 0)
 
             var found = 0
+            var skipped = 0
             images.forEachIndexed { index, image ->
                 ensureActive() // işbirlikçi iptal noktası
 
                 val existing = cached[image.id]
-                val text = if (existing != null && existing.dateModifiedMillis == image.dateModifiedMillis) {
-                    existing.recognizedText
+                val fromCache = existing != null && existing.dateModifiedMillis == image.dateModifiedMillis
+                if (fromCache) skipped++
+                val text = if (fromCache) {
+                    existing!!.recognizedText
                 } else {
                     val recognized = withContext(Dispatchers.IO) {
                         detector.recognizeText(appContext, image)
@@ -88,13 +91,13 @@ object ScanEngine {
                 if (FridayScorer.score(text, settings).score >= settings.threshold) {
                     found++
                 }
-                _state.value = ScanState.Scanning(index + 1, images.size, found)
+                _state.value = ScanState.Scanning(index + 1, images.size, found, skipped)
 
                 // CPU'yu sürekli %100'de tutmayıp kısa nefes aralıkları bırak:
                 // Samsung "Cihaz bakımı" gibi pil yöneticilerinin "çok kaynak
                 // kullanıyor" uyarısını tetiklemesini azaltır. Yalnızca gerçekten
                 // OCR yapıldığında (yeni görsel) beklenir; cache'ten okunuyorsa hızlı geçer.
-                if (existing == null || existing.dateModifiedMillis != image.dateModifiedMillis) {
+                if (!fromCache) {
                     delay(8)
                 }
             }

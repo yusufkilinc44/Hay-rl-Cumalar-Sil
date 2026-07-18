@@ -454,6 +454,14 @@ private fun ScanningPanel(state: ScanState.Scanning, onCancel: () -> Unit) {
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
+                if (state.skipped > 0) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "↩️ ${state.skipped} görsel daha önce tarandığı için atlandı",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
             }
             Spacer(Modifier.height(12.dp))
             Button(
