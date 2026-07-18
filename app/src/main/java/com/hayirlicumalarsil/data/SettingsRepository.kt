@@ -48,7 +48,7 @@ data class DetectionSettings(
     val strongWeight: Int = 70,
     val weakWeight: Int = 10,
     val whatsappOnly: Boolean = true,
-    val thursdayFridayOnly: Boolean = false,
+    val thursdayFridayOnly: Boolean = true,
     val strongKeywords: Set<String> = DEFAULT_STRONG_KEYWORDS,
     val weakKeywords: Set<String> = DEFAULT_WEAK_KEYWORDS,
 )
@@ -104,7 +104,7 @@ class SettingsRepository(private val context: Context) {
             strongWeight = p[Keys.STRONG_WEIGHT] ?: 70,
             weakWeight = p[Keys.WEAK_WEIGHT] ?: 10,
             whatsappOnly = p[Keys.WHATSAPP_ONLY] ?: true,
-            thursdayFridayOnly = p[Keys.THU_FRI_ONLY] ?: false,
+            thursdayFridayOnly = p[Keys.THU_FRI_ONLY] ?: true,
             strongKeywords = p[Keys.STRONG_KEYWORDS] ?: DEFAULT_STRONG_KEYWORDS,
             weakKeywords = p[Keys.WEAK_KEYWORDS] ?: DEFAULT_WEAK_KEYWORDS,
         )
