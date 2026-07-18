@@ -6,39 +6,28 @@ import android.graphics.BitmapFactory
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import com.hayirlicumalarsil.data.DetectionSettings
 import com.hayirlicumalarsil.data.MediaImage
 import kotlinx.coroutines.tasks.await
 
-data class Candidate(
-    val image: MediaImage,
-    val score: Int,
-    val matchedKeywords: List<String>,
-    val recognizedText: String,
-)
-
-/** ML Kit ile görseldeki metni okur, [FridayScorer] ile puanlar. */
+/** ML Kit ile görseldeki metni okur. Skorlama [FridayScorer]/[buildCandidate] tarafında yapılır. */
 class FridayDetector {
 
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
-    suspend fun analyze(context: Context, image: MediaImage, settings: DetectionSettings): Candidate? {
+    /**
+     * Görseli okur ve tanınan ham metni döner. Bitmap çözülemezse null,
+     * OCR başarısız olursa boş string döner (çağıran ikisini ayırt edebilir:
+     * null = dosya okunamadı, "" = metin bulunamadı).
+     */
+    suspend fun recognizeText(context: Context, image: MediaImage): String? {
         val bitmap = decodeSampled(context, image) ?: return null
-        val rawText = try {
+        return try {
             recognizer.process(InputImage.fromBitmap(bitmap, 0)).await().text
         } catch (e: Exception) {
             ""
         } finally {
             bitmap.recycle()
         }
-
-        val result = FridayScorer.score(rawText, image.name, image.dateMillis, settings)
-        return Candidate(
-            image = image,
-            score = result.score,
-            matchedKeywords = result.matchedKeywords,
-            recognizedText = rawText.take(600),
-        )
     }
 
     /** OOM riskine karşı görseli en fazla [MAX_DIMENSION] piksel olacak şekilde küçülterek yükler. */

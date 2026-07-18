@@ -1,53 +1,59 @@
 package com.hayirlicumalarsil
 
 import android.app.Application
+import android.content.Intent
 import android.content.IntentSender
 import android.os.Build
 import android.provider.MediaStore
-import androidx.compose.runtime.mutableStateListOf
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.hayirlicumalarsil.data.DetectionSettings
-import com.hayirlicumalarsil.data.MediaScanner
 import com.hayirlicumalarsil.data.SettingsRepository
 import com.hayirlicumalarsil.data.db.AppDatabase
 import com.hayirlicumalarsil.data.db.DeleteRecord
-import com.hayirlicumalarsil.data.db.ScanRecord
 import com.hayirlicumalarsil.detection.Candidate
-import com.hayirlicumalarsil.detection.FridayDetector
+import com.hayirlicumalarsil.detection.buildCandidate
+import com.hayirlicumalarsil.scan.ScanEngine
+import com.hayirlicumalarsil.scan.ScanService
+import com.hayirlicumalarsil.scan.ScanState
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-sealed interface ScanState {
-    data object Idle : ScanState
-    data class Scanning(val scanned: Int, val total: Int, val found: Int) : ScanState
-    data object Results : ScanState
-    data class Deleted(val count: Int, val bytes: Long) : ScanState
-}
-
 class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
     private val settingsRepo = SettingsRepository(app)
-    private val dao = AppDatabase.get(app).historyDao()
-    private val scanner = MediaScanner(app)
-    private val detector = FridayDetector()
+    private val db = AppDatabase.get(app)
+    private val dao = db.historyDao()
+    private val scanCacheDao = db.scanCacheDao()
 
     val settings = settingsRepo.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, DetectionSettings())
 
-    private val _state = MutableStateFlow<ScanState>(ScanState.Idle)
-    val state = _state.asStateFlow()
+    /** "Silme tamamlandı" kutlaması gibi yalnızca UI'a ait geçici durum. */
+    private val _localOverlay = MutableStateFlow<ScanState?>(null)
 
-    /** Son taramada eşiği geçen adaylar (puana göre sıralı). */
-    val candidates = mutableStateListOf<Candidate>()
+    /** Tarama motorunun durumu ile UI-overlay'in birleşimi. */
+    val state = combine(ScanEngine.state, _localOverlay) { engine, overlay ->
+        overlay ?: engine
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ScanState.Idle)
+
+    /**
+     * Adaylar artık Room'dan türetiliyor: hem tarama sırasında canlı güncellenir
+     * (motor her görseli yazdıkça) hem de eşik/kelime ayarı değişince yeniden
+     * skorlanır. "Durdur = Room'daki neyse o" — ayrı snapshot mantığı gerekmez.
+     */
+    val candidates = combine(scanCacheDao.observeAll(), settings) { rows, s ->
+        rows.mapNotNull { buildCandidate(it, s) }.sortedByDescending { it.score }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedIds = _selectedIds.asStateFlow()
@@ -56,49 +62,32 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         buildStats(deletes, scans)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StatsUi())
 
-    private var scanJob: Job? = null
+    val cacheCount = scanCacheDao.countFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     private var pendingDelete: List<Candidate> = emptyList()
 
+    init {
+        // Yeni tarama sonuçları geldikçe varsayılan olarak hepsini seçili yap;
+        // silme/eşik değişikliğiyle kaybolan adayların seçimini de temizle.
+        candidates.onEach { list ->
+            val ids = list.map { it.image.id }.toSet()
+            val current = _selectedIds.value
+            _selectedIds.value = if (current.isEmpty()) ids else current intersect ids
+        }.launchIn(viewModelScope)
+    }
+
     fun startScan() {
-        if (_state.value is ScanState.Scanning) return
-        scanJob = viewModelScope.launch {
-            val activeSettings = settingsRepo.settings.first()
-            _state.value = ScanState.Scanning(0, 0, 0)
-
-            val images = withContext(Dispatchers.IO) { scanner.loadImages(activeSettings) }
-            _state.value = ScanState.Scanning(0, images.size, 0)
-
-            val found = mutableListOf<Candidate>()
-            images.forEachIndexed { index, image ->
-                val candidate = withContext(Dispatchers.IO) {
-                    detector.analyze(getApplication(), image, activeSettings)
-                }
-                if (candidate != null && candidate.score >= activeSettings.threshold) {
-                    found += candidate
-                }
-                _state.value = ScanState.Scanning(index + 1, images.size, found.size)
-            }
-
-            found.sortByDescending { it.score }
-            candidates.clear()
-            candidates.addAll(found)
-            _selectedIds.value = found.map { it.image.id }.toSet()
-
-            dao.insertScan(
-                ScanRecord(
-                    timestamp = System.currentTimeMillis(),
-                    scannedCount = images.size,
-                    foundCount = found.size,
-                )
-            )
-            _state.value = ScanState.Results
-        }
+        if (ScanEngine.isScanning) return
+        _localOverlay.value = null
+        ContextCompat.startForegroundService(
+            getApplication(),
+            Intent(getApplication(), ScanService::class.java),
+        )
     }
 
     fun cancelScan() {
-        scanJob?.cancel()
-        scanJob = null
-        _state.value = if (candidates.isEmpty()) ScanState.Idle else ScanState.Results
+        ScanEngine.cancel()
     }
 
     fun toggleSelection(id: Long) {
@@ -107,7 +96,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectAll() {
-        _selectedIds.value = candidates.map { it.image.id }.toSet()
+        _selectedIds.value = candidates.value.map { it.image.id }.toSet()
     }
 
     fun clearSelection() {
@@ -115,12 +104,16 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectedCandidates(): List<Candidate> =
-        candidates.filter { it.image.id in _selectedIds.value }
+        candidates.value.filter { it.image.id in _selectedIds.value }
+
+    /** Önbelleği temizler; sonraki tarama her görseli baştan OCR'lar. */
+    fun clearScanCache() {
+        viewModelScope.launch { scanCacheDao.clearAll() }
+    }
 
     /**
      * Silme akışını başlatır. Android 11+ üzerinde sistem onay penceresi için
-     * [IntentSender] üretir ve [onIntentSender] ile arayüze iletir; eski
-     * sürümlerde doğrudan siler.
+     * [IntentSender] üretir; eski sürümlerde doğrudan siler.
      */
     fun requestDelete(onIntentSender: (IntentSender) -> Unit) {
         val selection = selectedCandidates()
@@ -169,14 +162,15 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                 DeleteRecord(timestamp = now, fileName = it.image.name, sizeBytes = it.image.sizeBytes)
             }
         )
-        val deletedIds = deleted.map { it.image.id }.toSet()
-        candidates.removeAll { it.image.id in deletedIds }
-        _selectedIds.value = _selectedIds.value - deletedIds
-        _state.value = ScanState.Deleted(deleted.size, deleted.sumOf { it.image.sizeBytes })
+        // Silinen görseller önbellekten de düşer; reaktif candidates akışı kendini günceller.
+        val deletedIds = deleted.map { it.image.id }
+        scanCacheDao.deleteByIds(deletedIds)
+        _selectedIds.value = _selectedIds.value - deletedIds.toSet()
+        _localOverlay.value = ScanState.Deleted(deleted.size, deleted.sumOf { it.image.sizeBytes })
     }
 
     fun dismissDeletedCelebration() {
-        _state.value = if (candidates.isEmpty()) ScanState.Idle else ScanState.Results
+        _localOverlay.value = null
     }
 
     // --- Ayar güncellemeleri ---

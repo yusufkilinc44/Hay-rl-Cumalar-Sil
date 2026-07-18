@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.hayirlicumalarsil.scan.ScanState
 import com.hayirlicumalarsil.ui.screens.HomeScreen
 import com.hayirlicumalarsil.ui.screens.ResultsScreen
 import com.hayirlicumalarsil.ui.screens.SettingsScreen
@@ -62,6 +63,7 @@ private val Tabs = listOf(
 fun MainScreen(vm: ScanViewModel = viewModel()) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val candidates by vm.candidates.collectAsStateWithLifecycle()
 
     // Tarama bitince otomatik olarak sonuçlar sekmesine geç
     var wasScanning by remember { mutableStateOf(false) }
@@ -70,7 +72,7 @@ fun MainScreen(vm: ScanViewModel = viewModel()) {
             wasScanning = true
         } else if (wasScanning) {
             wasScanning = false
-            if (state is ScanState.Results && vm.candidates.isNotEmpty()) selectedTab = 1
+            if (state is ScanState.Results && candidates.isNotEmpty()) selectedTab = 1
         }
     }
 
@@ -83,9 +85,9 @@ fun MainScreen(vm: ScanViewModel = viewModel()) {
                         onClick = { selectedTab = index },
                         label = { Text(tab.title) },
                         icon = {
-                            if (index == 1 && vm.candidates.isNotEmpty()) {
+                            if (index == 1 && candidates.isNotEmpty()) {
                                 BadgedBox(
-                                    badge = { Badge { Text(vm.candidates.size.toString()) } }
+                                    badge = { Badge { Text(candidates.size.toString()) } }
                                 ) {
                                     Icon(painterResource(tab.icon), contentDescription = tab.title)
                                 }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -45,6 +47,8 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsScreen(vm: ScanViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val cacheCount by vm.cacheCount.collectAsStateWithLifecycle()
+    var showClearCacheDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -147,6 +151,25 @@ fun SettingsScreen(vm: ScanViewModel) {
             )
         }
 
+        SettingsCard(title = "Tarama önbelleği") {
+            Text(
+                text = "$cacheCount görsel önbellekte. Eşik ve anahtar kelime " +
+                    "değişiklikleri, yeniden tarama olmadan bu görsellere anında uygulanır. " +
+                    "Okunan metinler yalnızca cihazda saklanır.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { showClearCacheDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("🧹")
+                Spacer(Modifier.size(8.dp))
+                Text("Tüm görselleri yeniden tara")
+            }
+        }
+
         OutlinedButton(
             onClick = vm::resetSettings,
             modifier = Modifier.fillMaxWidth(),
@@ -192,6 +215,28 @@ fun SettingsScreen(vm: ScanViewModel) {
         }
 
         Spacer(Modifier.height(24.dp))
+    }
+
+    if (showClearCacheDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearCacheDialog = false },
+            title = { Text("Yeniden tarama") },
+            text = {
+                Text(
+                    "Önbellekteki $cacheCount kaydın tamamı silinecek. Sonraki tarama " +
+                        "tüm görselleri baştan okuyacağı için daha uzun sürer. Devam edilsin mi?"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.clearScanCache()
+                    showClearCacheDialog = false
+                }) { Text("Temizle") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearCacheDialog = false }) { Text("Vazgeç") }
+            },
+        )
     }
 }
 

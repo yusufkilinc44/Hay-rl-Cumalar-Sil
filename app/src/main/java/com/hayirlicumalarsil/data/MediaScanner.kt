@@ -15,6 +15,7 @@ data class MediaImage(
     val sizeBytes: Long,
     val dateMillis: Long,
     val path: String,
+    val dateModifiedMillis: Long = 0L,
 )
 
 fun MediaImage.dayOfWeek(): DayOfWeek =
@@ -30,6 +31,7 @@ class MediaScanner(private val context: Context) {
             MediaStore.Images.Media.SIZE,
             MediaStore.Images.Media.DATE_ADDED,
             MediaStore.Images.Media.DATE_TAKEN,
+            MediaStore.Images.Media.DATE_MODIFIED,
             MediaStore.Images.Media.DATA,
         )
         val images = mutableListOf<MediaImage>()
@@ -47,6 +49,7 @@ class MediaScanner(private val context: Context) {
             val sizeCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE)
             val addedCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
             val takenCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_TAKEN)
+            val modifiedCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_MODIFIED)
             val dataCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
 
             while (c.moveToNext()) {
@@ -64,6 +67,7 @@ class MediaScanner(private val context: Context) {
                     sizeBytes = size,
                     dateMillis = dateMillis,
                     path = path,
+                    dateModifiedMillis = c.getLong(modifiedCol),
                 )
                 if (passesFilters(image, settings)) images += image
             }

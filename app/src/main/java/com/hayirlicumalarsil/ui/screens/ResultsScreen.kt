@@ -57,8 +57,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.hayirlicumalarsil.R
-import com.hayirlicumalarsil.ScanState
 import com.hayirlicumalarsil.ScanViewModel
+import com.hayirlicumalarsil.scan.ScanState
 import com.hayirlicumalarsil.detection.Candidate
 import com.hayirlicumalarsil.formatBytes
 import com.hayirlicumalarsil.ui.components.ConfettiOverlay
@@ -69,6 +69,7 @@ import com.hayirlicumalarsil.ui.theme.HeroGradient
 fun ResultsScreen(vm: ScanViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
     val selectedIds by vm.selectedIds.collectAsStateWithLifecycle()
+    val candidates by vm.candidates.collectAsStateWithLifecycle()
     var detailCandidate by remember { mutableStateOf<Candidate?>(null) }
 
     val deleteLauncher = rememberLauncherForActivityResult(
@@ -84,12 +85,12 @@ fun ResultsScreen(vm: ScanViewModel) {
         return
     }
 
-    if (vm.candidates.isEmpty()) {
+    if (candidates.isEmpty()) {
         EmptyResults()
         return
     }
 
-    val selectedCandidates = vm.candidates.filter { it.image.id in selectedIds }
+    val selectedCandidates = candidates.filter { it.image.id in selectedIds }
     val selectedBytes = selectedCandidates.sumOf { it.image.sizeBytes }
 
     Column(Modifier.fillMaxSize()) {
@@ -102,7 +103,7 @@ fun ResultsScreen(vm: ScanViewModel) {
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "${vm.candidates.size} görsel bulundu",
+                    text = "${candidates.size} görsel bulundu",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold,
                 )
@@ -123,7 +124,7 @@ fun ResultsScreen(vm: ScanViewModel) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(vm.candidates, key = { it.image.id }) { candidate ->
+            items(candidates, key = { it.image.id }) { candidate ->
                 CandidateCell(
                     candidate = candidate,
                     selected = candidate.image.id in selectedIds,

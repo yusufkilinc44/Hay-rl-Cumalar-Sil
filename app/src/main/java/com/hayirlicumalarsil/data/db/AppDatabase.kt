@@ -9,6 +9,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "scan_history")
@@ -42,13 +44,39 @@ interface HistoryDao {
     fun deletes(): Flow<List<DeleteRecord>>
 }
 
-@Database(entities = [ScanRecord::class, DeleteRecord::class], version = 1, exportSchema = false)
+@Database(
+    entities = [ScanRecord::class, DeleteRecord::class, ScannedImageRecord::class],
+    version = 2,
+    exportSchema = false,
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun historyDao(): HistoryDao
+    abstract fun scanCacheDao(): ScanCacheDao
 
     companion object {
         @Volatile
         private var instance: AppDatabase? = null
+
+        /** v1 → v2: yalnızca yeni scanned_image tablosunu ekler; mevcut istatistikler korunur. */
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `scanned_image` (
+                        `mediaId` INTEGER NOT NULL,
+                        `uriString` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `sizeBytes` INTEGER NOT NULL,
+                        `dateMillis` INTEGER NOT NULL,
+                        `dateModifiedMillis` INTEGER NOT NULL,
+                        `recognizedText` TEXT NOT NULL,
+                        `scannedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`mediaId`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
 
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
@@ -56,7 +84,10 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "hcs.db",
-                ).build().also { instance = it }
+                )
+                    .addMigrations(MIGRATION_1_2)
+                    .fallbackToDestructiveMigration()
+                    .build().also { instance = it }
             }
     }
 }

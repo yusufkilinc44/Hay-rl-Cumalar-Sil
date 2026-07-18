@@ -13,8 +13,8 @@ android {
         applicationId = "com.hayirlicumalarsil"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.1.0"
     }
 
     // ML Kit her CPU mimarisi için ayrı native kütüphane taşıyor; neredeyse tüm
@@ -71,6 +71,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-service:2.8.7")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")

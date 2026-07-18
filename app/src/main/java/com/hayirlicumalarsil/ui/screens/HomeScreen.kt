@@ -54,8 +54,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hayirlicumalarsil.R
-import com.hayirlicumalarsil.ScanState
 import com.hayirlicumalarsil.ScanViewModel
+import com.hayirlicumalarsil.scan.ScanState
 import com.hayirlicumalarsil.formatBytes
 import com.hayirlicumalarsil.ui.components.AnimatedCountText
 import com.hayirlicumalarsil.ui.theme.HeroGradient
@@ -63,7 +63,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private fun requiredPermissions(): Array<String> = when {
+/** Görsellere erişmek için gereken izin(ler). Taramanın ön koşuludur. */
+private fun mediaPermissions(): Array<String> = when {
     Build.VERSION.SDK_INT >= 34 -> arrayOf(
         Manifest.permission.READ_MEDIA_IMAGES,
         Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
@@ -72,8 +73,18 @@ private fun requiredPermissions(): Array<String> = when {
     else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
 }
 
+/**
+ * İzin isteğinde medya izniyle birlikte (API 33+) bildirim iznini de sorar;
+ * bildirim reddedilse de tarama çalışır, yalnız ilerleme bildirimi görünmez.
+ */
+private fun requestedPermissions(): Array<String> {
+    val perms = mediaPermissions().toMutableList()
+    if (Build.VERSION.SDK_INT >= 33) perms += Manifest.permission.POST_NOTIFICATIONS
+    return perms.toTypedArray()
+}
+
 private fun hasImagePermission(context: Context): Boolean =
-    requiredPermissions().any {
+    mediaPermissions().any {
         context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED
     }
 
@@ -82,11 +93,14 @@ fun HomeScreen(vm: ScanViewModel, onGoResults: () -> Unit) {
     val context = LocalContext.current
     val state by vm.state.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
+    val candidates by vm.candidates.collectAsStateWithLifecycle()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
-        if (grants.any { it.value }) vm.startScan()
+        // Yalnızca medya izni verildiyse tara; sadece bildirim izni verilmesi yetmez.
+        val mediaGranted = mediaPermissions().any { grants[it] == true }
+        if (mediaGranted) vm.startScan()
     }
 
     Column(
@@ -148,12 +162,12 @@ fun HomeScreen(vm: ScanViewModel, onGoResults: () -> Unit) {
                 ScanButton(
                     onClick = {
                         if (hasImagePermission(context)) vm.startScan()
-                        else permissionLauncher.launch(requiredPermissions())
+                        else permissionLauncher.launch(requestedPermissions())
                     }
                 )
                 Spacer(Modifier.height(24.dp))
                 AnimatedVisibility(
-                    visible = vm.candidates.isNotEmpty(),
+                    visible = candidates.isNotEmpty(),
                     enter = fadeIn() + slideInVertically { it / 2 },
                 ) {
                     Card(
@@ -177,12 +191,12 @@ fun HomeScreen(vm: ScanViewModel, onGoResults: () -> Unit) {
                             Spacer(Modifier.size(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    text = "${vm.candidates.size} aday görsel bulundu",
+                                    text = "${candidates.size} aday görsel bulundu",
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                                 )
                                 Text(
-                                    text = formatBytes(vm.candidates.sumOf { it.image.sizeBytes }) +
+                                    text = formatBytes(candidates.sumOf { it.image.sizeBytes }) +
                                         " yer kazanabilirsin",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer,
