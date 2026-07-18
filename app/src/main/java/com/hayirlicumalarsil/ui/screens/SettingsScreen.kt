@@ -65,6 +65,14 @@ fun SettingsScreen(vm: ScanViewModel) {
         Spacer(Modifier.height(16.dp))
 
         SettingsCard(title = "Tespit hassasiyeti") {
+            SettingSwitch(
+                label = "Yalnızca gerçek cuma mesajları",
+                description = "Açıkken bir görselin bulunması için mutlaka \"Hayırlı Cumalar\" " +
+                    "benzeri bir ifade içermesi gerekir. Sadece \"allah/dua\" gibi kelimeler taşıyan " +
+                    "karikatür, selfie vb. elenir. (Önerilir)",
+                checked = settings.requireStrongKeyword,
+                onCheckedChange = vm::setRequireStrongKeyword,
+            )
             SettingSlider(
                 label = "Tespit eşiği",
                 description = "Cuma Skoru bu değerin üzerindeki görseller aday sayılır",
@@ -86,20 +94,27 @@ fun SettingsScreen(vm: ScanViewModel) {
                 range = 0f..30f,
                 onCommit = vm::setWeakWeight,
             )
-            SettingSlider(
-                label = "Perşembe/Cuma günü bonusu",
-                description = "Dosya perşembe veya cuma günü oluştuysa eklenen puan",
-                value = settings.dayBonus,
-                range = 0f..30f,
-                onCommit = vm::setDayBonus,
-            )
-            SettingSlider(
-                label = "WhatsApp dosya adı bonusu",
-                description = "IMG-...-WA... adlı dosyalara eklenen puan",
-                value = settings.nameBonus,
-                range = 0f..30f,
-                onCommit = vm::setNameBonus,
-            )
+            // Bu bonuslar yalnızca ilgili kapsam filtresi KAPALIYKEN ayırt edici
+            // olduğu için, filtre açıkken gösterilmez (aksi halde herkese aynı
+            // puanı ekler, anlamsız olur).
+            if (!settings.thursdayFridayOnly) {
+                SettingSlider(
+                    label = "Perşembe/Cuma günü bonusu",
+                    description = "Dosya perşembe veya cuma günü oluştuysa eklenen puan",
+                    value = settings.dayBonus,
+                    range = 0f..30f,
+                    onCommit = vm::setDayBonus,
+                )
+            }
+            if (!settings.whatsappOnly) {
+                SettingSlider(
+                    label = "WhatsApp dosya adı bonusu",
+                    description = "IMG-...-WA... adlı dosyalara eklenen puan",
+                    value = settings.nameBonus,
+                    range = 0f..30f,
+                    onCommit = vm::setNameBonus,
+                )
+            }
         }
 
         SettingsCard(title = "Tarama kapsamı") {

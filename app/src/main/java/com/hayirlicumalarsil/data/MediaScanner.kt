@@ -16,10 +16,26 @@ data class MediaImage(
     val dateMillis: Long,
     val path: String,
     val dateModifiedMillis: Long = 0L,
+    val isWhatsapp: Boolean = false,
 )
 
-fun MediaImage.dayOfWeek(): DayOfWeek =
-    Instant.ofEpochMilli(dateMillis).atZone(ZoneId.systemDefault()).dayOfWeek
+private fun isThursdayOrFriday(dateMillis: Long): Boolean {
+    val day = Instant.ofEpochMilli(dateMillis).atZone(ZoneId.systemDefault()).dayOfWeek
+    return day == DayOfWeek.THURSDAY || day == DayOfWeek.FRIDAY
+}
+
+/**
+ * Tarama kapsamı filtreleri — hem tarama anında (MediaScanner) hem aday
+ * türetiminde (buildCandidate) AYNI mantık kullanılır ki Ana ekran ile Sonuçlar
+ * tutarlı olsun; eski geniş taramadan kalan, güncel filtreye uymayan kayıtlar
+ * sonuçlara sızmaz.
+ */
+fun DetectionSettings.accepts(isWhatsapp: Boolean, sizeBytes: Long, dateMillis: Long): Boolean {
+    if (whatsappOnly && !isWhatsapp) return false
+    if (sizeBytes < minSizeKb * 1024L) return false
+    if (thursdayFridayOnly && !isThursdayOrFriday(dateMillis)) return false
+    return true
+}
 
 /** MediaStore üzerinden cihazdaki görselleri listeler. */
 class MediaScanner(private val context: Context) {
@@ -60,6 +76,8 @@ class MediaScanner(private val context: Context) {
                 val dateMillis = if (taken > 0) taken else c.getLong(addedCol) * 1000L
                 val path = c.getString(dataCol) ?: ""
 
+                val isWhatsapp = path.contains("whatsapp images", ignoreCase = true) ||
+                    name.startsWith("IMG-", ignoreCase = true) && name.contains("-WA", ignoreCase = true)
                 val image = MediaImage(
                     id = id,
                     uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id),
@@ -68,24 +86,13 @@ class MediaScanner(private val context: Context) {
                     dateMillis = dateMillis,
                     path = path,
                     dateModifiedMillis = c.getLong(modifiedCol),
+                    isWhatsapp = isWhatsapp,
                 )
-                if (passesFilters(image, settings)) images += image
+                if (settings.accepts(image.isWhatsapp, image.sizeBytes, image.dateMillis)) {
+                    images += image
+                }
             }
         }
         return images
-    }
-
-    private fun passesFilters(image: MediaImage, settings: DetectionSettings): Boolean {
-        if (settings.whatsappOnly &&
-            !image.path.contains("whatsapp images", ignoreCase = true)
-        ) return false
-
-        if (image.sizeBytes < settings.minSizeKb * 1024L) return false
-
-        if (settings.thursdayFridayOnly) {
-            val day = image.dayOfWeek()
-            if (day != DayOfWeek.THURSDAY && day != DayOfWeek.FRIDAY) return false
-        }
-        return true
     }
 }

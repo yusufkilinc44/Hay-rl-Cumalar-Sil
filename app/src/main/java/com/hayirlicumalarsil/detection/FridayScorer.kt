@@ -23,9 +23,11 @@ data class ScoreResult(
  */
 object FridayScorer {
 
-    private val WHATSAPP_NAME_REGEX = Regex("IMG-\\d{8}-WA\\d+.*", RegexOption.IGNORE_CASE)
+    val WHATSAPP_NAME_REGEX = Regex("IMG-\\d{8}-WA\\d+.*", RegexOption.IGNORE_CASE)
     private const val EXTRA_STRONG_MATCH_BONUS = 10
     private const val MAX_COUNTED_WEAK_MATCHES = 3
+
+    fun isWhatsappName(fileName: String): Boolean = WHATSAPP_NAME_REGEX.matches(fileName)
 
     fun score(
         rawText: String,
@@ -36,9 +38,9 @@ object FridayScorer {
         val normalizedText = TextNormalizer.normalize(rawText)
         val matched = mutableListOf<String>()
         var score = 0
+        var strongCount = 0
 
         if (normalizedText.isNotBlank()) {
-            var strongCount = 0
             for (keyword in settings.strongKeywords) {
                 val needle = TextNormalizer.normalize(keyword)
                 if (needle.isNotBlank() && normalizedText.contains(needle)) {
@@ -61,12 +63,26 @@ object FridayScorer {
             score += weakCount * settings.weakWeight
         }
 
-        val day = Instant.ofEpochMilli(dateMillis).atZone(ZoneId.systemDefault()).dayOfWeek
-        if (day == DayOfWeek.THURSDAY || day == DayOfWeek.FRIDAY) {
-            score += settings.dayBonus
+        // Ana kural: gerçek bir "hayırlı cumalar" ifadesi yoksa bu bir cuma
+        // kutlaması değildir (karikatür, selfie vb. elenir). Tarih/dosya adı
+        // bonusları tek başına aday yapamaz.
+        if (settings.requireStrongKeyword && strongCount == 0) {
+            return ScoreResult(0, emptyList())
         }
 
-        if (WHATSAPP_NAME_REGEX.matches(fileName)) {
+        // Gün bonusu yalnızca "sadece perşembe/cuma" filtresi KAPALIYKEN ayırt
+        // edicidir; filtre açıkken zaten hepsi perşembe/cuma olur, uniform katkı
+        // anlamsızdır, o yüzden uygulanmaz.
+        if (!settings.thursdayFridayOnly) {
+            val day = Instant.ofEpochMilli(dateMillis).atZone(ZoneId.systemDefault()).dayOfWeek
+            if (day == DayOfWeek.THURSDAY || day == DayOfWeek.FRIDAY) {
+                score += settings.dayBonus
+            }
+        }
+
+        // WhatsApp dosya adı bonusu yalnızca "sadece WhatsApp" filtresi KAPALIYKEN
+        // ayırt edicidir; açıkken zaten hepsi WhatsApp'tır.
+        if (!settings.whatsappOnly && WHATSAPP_NAME_REGEX.matches(fileName)) {
             score += settings.nameBonus
         }
 

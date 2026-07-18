@@ -44,6 +44,12 @@ data class DetectionSettings(
     val whatsappOnly: Boolean = true,
     val thursdayFridayOnly: Boolean = false,
     val minSizeKb: Int = 0,
+    /**
+     * Açıkken bir görselin aday sayılması için mutlaka güçlü bir ifade
+     * ("hayırlı cumalar" vb.) içermesi gerekir. Yalnızca "allah", "dua" gibi
+     * zayıf kelimeler taşıyan (ör. bir karikatür) görseller elenir.
+     */
+    val requireStrongKeyword: Boolean = true,
     val strongKeywords: Set<String> = DEFAULT_STRONG_KEYWORDS,
     val weakKeywords: Set<String> = DEFAULT_WEAK_KEYWORDS,
 )
@@ -61,6 +67,7 @@ class SettingsRepository(private val context: Context) {
         val WHATSAPP_ONLY = booleanPreferencesKey("whatsapp_only")
         val THU_FRI_ONLY = booleanPreferencesKey("thu_fri_only")
         val MIN_SIZE_KB = intPreferencesKey("min_size_kb")
+        val REQUIRE_STRONG = booleanPreferencesKey("require_strong")
         val STRONG_KEYWORDS = stringSetPreferencesKey("strong_keywords")
         val WEAK_KEYWORDS = stringSetPreferencesKey("weak_keywords")
     }
@@ -75,6 +82,7 @@ class SettingsRepository(private val context: Context) {
             whatsappOnly = p[Keys.WHATSAPP_ONLY] ?: true,
             thursdayFridayOnly = p[Keys.THU_FRI_ONLY] ?: false,
             minSizeKb = p[Keys.MIN_SIZE_KB] ?: 0,
+            requireStrongKeyword = p[Keys.REQUIRE_STRONG] ?: true,
             strongKeywords = p[Keys.STRONG_KEYWORDS] ?: DEFAULT_STRONG_KEYWORDS,
             weakKeywords = p[Keys.WEAK_KEYWORDS] ?: DEFAULT_WEAK_KEYWORDS,
         )
@@ -93,6 +101,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setThursdayFridayOnly(v: Boolean) {
         context.dataStore.edit { it[Keys.THU_FRI_ONLY] = v }
+    }
+
+    suspend fun setRequireStrongKeyword(v: Boolean) {
+        context.dataStore.edit { it[Keys.REQUIRE_STRONG] = v }
     }
 
     suspend fun addStrongKeyword(word: String) = editKeywords(Keys.STRONG_KEYWORDS, DEFAULT_STRONG_KEYWORDS) { it + word.trim() }

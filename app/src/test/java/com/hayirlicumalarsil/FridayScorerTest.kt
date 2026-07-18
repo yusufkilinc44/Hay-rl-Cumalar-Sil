@@ -32,7 +32,7 @@ class FridayScorerTest {
             dateMillis = fridayMillis,
             settings = settings,
         )
-        // güçlü(70) + zayıf: dua? ("dualariniz" tam kelime değil) + amin(10) + gün(15) + ad(10) → 100'e sıkışır
+        // güçlü(70) + zayıf amin(10) + gün(15); ad bonusu whatsappOnly açıkken uygulanmaz
         assertTrue("beklenen >= eşik, gelen: ${result.score}", result.score >= settings.threshold)
         assertTrue(result.matchedKeywords.contains("hayırlı cumalar"))
     }
@@ -49,15 +49,28 @@ class FridayScorerTest {
     }
 
     @Test
-    fun `metinsiz gorsel sadece bonuslarla esigi gecemez`() {
+    fun `metinsiz gorsel guclu kelime sarti ile elenir`() {
+        // Beach selfie senaryosu: metin yok, cuma günü + WA adı. Güçlü kelime
+        // şartı açıkken (varsayılan) skor 0 olmalı — aday olmamalı.
         val result = FridayScorer.score(
             rawText = "",
             fileName = "IMG-20260710-WA0001.jpg",
             dateMillis = fridayMillis,
             settings = settings,
         )
-        assertTrue(result.score < settings.threshold)
-        assertEquals(settings.dayBonus + settings.nameBonus, result.score)
+        assertEquals(0, result.score)
+    }
+
+    @Test
+    fun `karikatur sadece zayif kelimeyle elenir`() {
+        // Banka karikatürü senaryosu: sadece "allah" geçiyor, güçlü ifade yok.
+        val result = FridayScorer.score(
+            rawText = "namaz kiliyor musunuz allah'a borcunu odemeyen bize hic odemez",
+            fileName = "IMG-20200817-WA0034.jpg",
+            dateMillis = mondayMillis,
+            settings = settings,
+        )
+        assertEquals(0, result.score)
     }
 
     @Test
@@ -73,15 +86,48 @@ class FridayScorerTest {
     }
 
     @Test
-    fun `zayif kelimeler tek basina esigi gecmez`() {
+    fun `guclu kelime sarti kapaliyken zayif kelimeler puanlanir`() {
+        // Güçlü kelime şartı kapatılırsa eski davranış: en çok 3 zayıf kelime sayılır.
         val result = FridayScorer.score(
             rawText = "dua amin bismillah ayet hadis",
             fileName = "random.png",
             dateMillis = mondayMillis,
-            settings = settings,
+            settings = settings.copy(requireStrongKeyword = false),
         )
-        // en çok 3 zayıf kelime sayılır: 3 * 10 = 30
         assertEquals(3 * settings.weakWeight, result.score)
+    }
+
+    @Test
+    fun `whatsapp filtresi acikken dosya adi bonusu uygulanmaz`() {
+        val withName = FridayScorer.score(
+            rawText = "hayırlı cumalar",
+            fileName = "IMG-20260710-WA0012.jpg",
+            dateMillis = mondayMillis,
+            settings = settings.copy(whatsappOnly = true),
+        )
+        // whatsappOnly açık → yalnız güçlü kelime puanı (70), ad bonusu yok
+        assertEquals(settings.strongWeight, withName.score)
+
+        val withoutFilter = FridayScorer.score(
+            rawText = "hayırlı cumalar",
+            fileName = "IMG-20260710-WA0012.jpg",
+            dateMillis = mondayMillis,
+            settings = settings.copy(whatsappOnly = false),
+        )
+        // whatsappOnly kapalı → ad bonusu eklenir
+        assertEquals(settings.strongWeight + settings.nameBonus, withoutFilter.score)
+    }
+
+    @Test
+    fun `sadece persembe cuma filtresi acikken gun bonusu uygulanmaz`() {
+        val result = FridayScorer.score(
+            rawText = "hayırlı cumalar",
+            fileName = "foto.jpg",
+            dateMillis = fridayMillis,
+            settings = settings.copy(thursdayFridayOnly = true),
+        )
+        // filtre açık → gün bonusu yok, yalnız güçlü kelime (70)
+        assertEquals(settings.strongWeight, result.score)
     }
 
     @Test

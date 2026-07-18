@@ -72,6 +72,7 @@ object ScanEngine {
                             dateModifiedMillis = image.dateModifiedMillis,
                             recognizedText = recognized.take(4000),
                             scannedAt = System.currentTimeMillis(),
+                            isWhatsapp = image.isWhatsapp,
                         )
                     )
                     recognized

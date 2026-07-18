@@ -23,6 +23,7 @@ data class ScannedImageRecord(
     val dateModifiedMillis: Long,
     val recognizedText: String,
     val scannedAt: Long,
+    val isWhatsapp: Boolean = false,
 )
 
 @Dao

@@ -194,6 +194,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     fun setMinSizeKb(v: Int) = launchSetting { settingsRepo.setMinSizeKb(v) }
     fun setWhatsappOnly(v: Boolean) = launchSetting { settingsRepo.setWhatsappOnly(v) }
     fun setThursdayFridayOnly(v: Boolean) = launchSetting { settingsRepo.setThursdayFridayOnly(v) }
+    fun setRequireStrongKeyword(v: Boolean) = launchSetting { settingsRepo.setRequireStrongKeyword(v) }
     fun addStrongKeyword(word: String) = launchSetting { settingsRepo.addStrongKeyword(word) }
     fun removeStrongKeyword(word: String) = launchSetting { settingsRepo.removeStrongKeyword(word) }
     fun addWeakKeyword(word: String) = launchSetting { settingsRepo.addWeakKeyword(word) }
