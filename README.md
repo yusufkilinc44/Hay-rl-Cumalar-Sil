@@ -32,8 +32,12 @@ görsellerini otomatik tespit eden ve **sizin onayınızla** silen, tamamen ciha
 ```
 
 APK `app/build/outputs/apk/debug/app-debug.apk` yoluna üretilir. Her push'ta GitHub
-Actions da APK üretip artifact olarak yükler, ayrıca `hayirli-cumalar-sil` ntfy
-konusuna bildirim gönderir.
+Actions da APK üretir; **GitHub Releases** altında doğrudan indirilebilir `.apk`
+olarak yayınlar (zip'e gerek yok), ayrıca artifact olarak da yükler ve
+`hayirli-cumalar-sil` ntfy konusuna indirme linkiyle bildirim gönderir.
+
+En güncel APK'yı doğrudan indirmek için deponun **Releases** sayfasına bakın veya
+ntfy bildirimindeki linke dokunun.
 
 ## Google Drive'a otomatik yükleme kurulumu (tek seferlik)
 

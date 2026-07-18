@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,11 +40,14 @@ jobs:
           NAME="HayirliCumalarSil-v${VN}-b${VC}.apk"
           cp "app/build/outputs/apk/debug/$SRC" "$NAME"
           SIZE=$(du -h "$NAME" | cut -f1)
+          TAG="v${VN}-b${VC}"
           {
             echo "name=$NAME"
             echo "version=$VN"
             echo "build=$VC"
             echo "size=$SIZE"
+            echo "tag=$TAG"
+            echo "direct=${{ github.server_url }}/${{ github.repository }}/releases/download/$TAG/$NAME"
           } >> "$GITHUB_OUTPUT"
 
       - name: Upload APK as artifact
@@ -50,6 +55,19 @@ jobs:
         with:
           name: hayirli-cumalar-sil-debug-apk
           path: ${{ steps.apk.outputs.name }}
+
+      # Doğrudan indirilebilir .apk için GitHub Release (zip'e gerek kalmaz).
+      - name: Publish GitHub Release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.apk.outputs.tag }}
+          name: Hayırlı Cumalar Sil ${{ steps.apk.outputs.tag }}
+          body: |
+            Otomatik derleme. APK'yı doğrudan indirmek için aşağıdaki
+            **${{ steps.apk.outputs.name }}** dosyasına dokun (zip değil, doğrudan .apk).
+          prerelease: true
+          files: ${{ steps.apk.outputs.name }}
 
       # "Android Apps" klasörüne yükleme. GDRIVE_SA_KEY ve GDRIVE_FOLDER_ID
       # secrets'ları tanımlı değilse adım hata vermeden atlanır.
@@ -82,14 +100,15 @@ jobs:
           APK_VERSION: ${{ steps.apk.outputs.version }}
           APK_BUILD: ${{ steps.apk.outputs.build }}
           APK_SIZE: ${{ steps.apk.outputs.size }}
+          DIRECT_URL: ${{ steps.apk.outputs.direct }}
           UPLOADED: ${{ steps.gdrive.outputs.uploaded }}
           DRIVE_LINK: ${{ steps.gdrive.outputs.link }}
         run: |
+          MSG="Yeni APK hazır: v${APK_VERSION} (build ${APK_BUILD}, ${APK_SIZE}). ✅"
+          MSG="$MSG Doğrudan indir (.apk): $DIRECT_URL"
           if [ "$UPLOADED" = "true" ]; then
-            MSG="Yeni APK hazır: v${APK_VERSION} (build ${APK_BUILD}, ${APK_SIZE}) Google Drive'daki 'Android Apps' klasörüne yüklendi. ✅"
-            [ -n "$DRIVE_LINK" ] && MSG="$MSG İndir: $DRIVE_LINK"
-          else
-            MSG="Yeni APK hazır: v${APK_VERSION} (build ${APK_BUILD}, ${APK_SIZE}). Google Drive yüklemesi atlandı — GDRIVE_SA_KEY ve GDRIVE_FOLDER_ID secrets'larını ekleyince otomatik yüklenecek. APK şimdilik GitHub Actions artifact'ında."
+            MSG="$MSG | Google Drive'a da yüklendi."
+            [ -n "$DRIVE_LINK" ] && MSG="$MSG ($DRIVE_LINK)"
           fi
           curl -fsS \
             -H "Title: Hayirli Cumalar Sil - yeni APK" \
