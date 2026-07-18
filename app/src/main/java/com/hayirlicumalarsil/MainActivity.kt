@@ -2,6 +2,7 @@ package com.hayirlicumalarsil
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
@@ -65,6 +66,9 @@ fun MainScreen(vm: ScanViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val candidates by vm.candidates.collectAsStateWithLifecycle()
 
+    // Geri tuşu: ana sayfada değilsek uygulamadan çıkmak yerine ana sayfaya dön.
+    BackHandler(enabled = selectedTab != 0) { selectedTab = 0 }
+
     // Tarama bitince otomatik olarak sonuçlar sekmesine geç
     var wasScanning by remember { mutableStateOf(false) }
     LaunchedEffect(state) {
@@ -74,6 +78,12 @@ fun MainScreen(vm: ScanViewModel = viewModel()) {
             wasScanning = false
             if (state is ScanState.Results && candidates.isNotEmpty()) selectedTab = 1
         }
+    }
+
+    // Sonuçlar sekmesine girince (ya da oradayken aday sayısı değişince) o an
+    // mevcut tüm adayları seçili yap.
+    LaunchedEffect(selectedTab, candidates.size) {
+        if (selectedTab == 1 && candidates.isNotEmpty()) vm.selectAll()
     }
 
     Scaffold(

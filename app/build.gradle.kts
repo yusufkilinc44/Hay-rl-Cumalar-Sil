@@ -13,8 +13,8 @@ android {
         applicationId = "com.hayirlicumalarsil"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.1.0"
+        versionCode = 5
+        versionName = "1.1.1"
     }
 
     // ML Kit her CPU mimarisi için ayrı native kütüphane taşıyor; neredeyse tüm

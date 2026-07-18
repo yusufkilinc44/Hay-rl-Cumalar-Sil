@@ -68,12 +68,12 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     private var pendingDelete: List<Candidate> = emptyList()
 
     init {
-        // Yeni tarama sonuçları geldikçe varsayılan olarak hepsini seçili yap;
-        // silme/eşik değişikliğiyle kaybolan adayların seçimini de temizle.
+        // Silme/eşik değişikliğiyle listeden düşen adayların seçimini temizle.
+        // Otomatik "hepsini seç" işi UI'da Sonuçlar'a girildiğinde yapılır
+        // (kullanıcı: "buraya gidince o an kaç tane varsa hepsi seçilsin").
         candidates.onEach { list ->
             val ids = list.map { it.image.id }.toSet()
-            val current = _selectedIds.value
-            _selectedIds.value = if (current.isEmpty()) ids else current intersect ids
+            _selectedIds.value = _selectedIds.value intersect ids
         }.launchIn(viewModelScope)
     }
 

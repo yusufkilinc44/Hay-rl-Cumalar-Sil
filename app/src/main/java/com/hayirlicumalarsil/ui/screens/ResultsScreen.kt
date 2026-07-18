@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,14 +30,15 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -54,6 +56,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.hayirlicumalarsil.R
@@ -162,7 +166,7 @@ fun ResultsScreen(vm: ScanViewModel) {
     }
 
     detailCandidate?.let { candidate ->
-        CandidateDetailDialog(
+        CandidatePreviewDialog(
             candidate = candidate,
             selected = candidate.image.id in selectedIds,
             onToggle = { vm.toggleSelection(candidate.image.id) },
@@ -188,7 +192,8 @@ private fun CandidateCell(
                 if (selected) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, shape)
                 else Modifier
             )
-            .combinedClickable(onClick = onToggle, onLongClick = onDetail),
+            // Dokunma = büyük önizleme; uzun basma = seçimi değiştir.
+            .combinedClickable(onClick = onDetail, onLongClick = onToggle),
     ) {
         AsyncImage(
             model = candidate.image.uri,
@@ -202,6 +207,7 @@ private fun CandidateCell(
                 .align(Alignment.TopStart)
                 .padding(6.dp),
         )
+        // Köşedeki işaret kutucuğu doğrudan seçimi açıp kapatır.
         Icon(
             painter = painterResource(
                 if (selected) R.drawable.ic_check_circle else R.drawable.ic_radio_unchecked
@@ -211,8 +217,11 @@ private fun CandidateCell(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(6.dp)
-                .size(24.dp)
-                .background(Color.Black.copy(alpha = 0.35f), CircleShape),
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.35f))
+                .clickable(onClick = onToggle)
+                .padding(2.dp),
         )
         Box(
             modifier = Modifier
@@ -234,74 +243,125 @@ private fun CandidateCell(
     }
 }
 
+/**
+ * Görselin tam ekran (neredeyse tüm ekranı kaplayan) önizlemesi; doğru görseli
+ * seçtiğini teyit etmek için. Skor, eşleşen kelimeler ve okunan metin de gösterilir;
+ * alttan doğrudan seç/kaldır yapılabilir.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CandidateDetailDialog(
+private fun CandidatePreviewDialog(
     candidate: Candidate,
     selected: Boolean,
     onToggle: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = { onToggle(); onDismiss() }) {
-                Text(if (selected) "Seçimden çıkar" else "Seç")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Kapat") }
-        },
-        title = { Text(candidate.image.name, style = MaterialTheme.typography.titleSmall) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                // Üst çubuk: dosya adı + kapat
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 8.dp, top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = candidate.image.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(painterResource(R.drawable.ic_close), contentDescription = "Kapat")
+                    }
+                }
+
+                // Büyük görsel — ekranın çoğunu kaplar
                 AsyncImage(
                     model = candidate.image.uri,
-                    contentDescription = null,
+                    contentDescription = candidate.image.name,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 260.dp)
+                        .weight(1f)
+                        .background(Color.Black)
                         .clip(MaterialTheme.shapes.medium),
                 )
-                Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    ScoreBadge(score = candidate.score)
-                    Spacer(Modifier.size(8.dp))
-                    Text(
-                        text = "Cuma Skoru • ${formatBytes(candidate.image.sizeBytes)}",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                if (candidate.matchedKeywords.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Eşleşen kelimeler:",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        candidate.matchedKeywords.forEach { keyword ->
-                            AssistChip(onClick = {}, label = { Text(keyword) })
+
+                // Alt bilgi + seçim butonu
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ScoreBadge(score = candidate.score)
+                        Spacer(Modifier.size(8.dp))
+                        Text(
+                            text = "Cuma Skoru • ${formatBytes(candidate.image.sizeBytes)}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    if (candidate.matchedKeywords.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            candidate.matchedKeywords.forEach { keyword ->
+                                AssistChip(onClick = {}, label = { Text(keyword) })
+                            }
                         }
                     }
-                }
-                if (candidate.recognizedText.isNotBlank()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Okunan metin:",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = candidate.recognizedText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    if (candidate.recognizedText.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Okunan metin:",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = candidate.recognizedText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = onToggle,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = if (selected) {
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            ButtonDefaults.buttonColors()
+                        },
+                    ) {
+                        Icon(
+                            painterResource(
+                                if (selected) R.drawable.ic_check_circle else R.drawable.ic_radio_unchecked
+                            ),
+                            contentDescription = null,
+                        )
+                        Spacer(Modifier.size(8.dp))
+                        Text(if (selected) "Silinecekler listesinde ✓" else "Silinecekler listesine ekle")
+                    }
                 }
             }
-        },
-    )
+        }
+    }
 }
 
 @Composable
