@@ -22,7 +22,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -47,13 +50,21 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, ScanState.Idle)
 
     /**
-     * Adaylar artık Room'dan türetiliyor: hem tarama sırasında canlı güncellenir
-     * (motor her görseli yazdıkça) hem de eşik/kelime ayarı değişince yeniden
-     * skorlanır. "Durdur = Room'daki neyse o" — ayrı snapshot mantığı gerekmez.
+     * Adaylar Room'dan türetiliyor: tarama sırasında canlı güncellenir ve
+     * eşik/kelime ayarı değişince yeniden skorlanır.
+     *
+     * PERFORMANS: Ağır skorlama (her kayıt için metin normalizasyonu) UI
+     * thread'ini kastırmasın diye [Dispatchers.Default]'a taşınır. Tarama
+     * sırasında Room her görselde emit ettiğinden [conflate] ile patlamalar
+     * birleştirilir — hesap meşgulken araya giren emisyonlar atlanır, yalnız
+     * en güncel durum işlenir. Böylece tarama arka planda sürerken menüler
+     * akıcı kalır.
      */
-    val candidates = combine(scanCacheDao.observeAll(), settings) { rows, s ->
-        rows.mapNotNull { buildCandidate(it, s) }.sortedByDescending { it.score }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val candidates = combine(scanCacheDao.observeAll(), settings) { rows, s -> rows to s }
+        .conflate()
+        .map { (rows, s) -> rows.mapNotNull { buildCandidate(it, s) }.sortedByDescending { it.score } }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedIds = _selectedIds.asStateFlow()
