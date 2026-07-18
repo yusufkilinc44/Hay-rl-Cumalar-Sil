@@ -42,13 +42,23 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hayirlicumalarsil.BuildConfig
 import com.hayirlicumalarsil.R
 import com.hayirlicumalarsil.ScanViewModel
+import com.hayirlicumalarsil.scan.ScanState
 import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(vm: ScanViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val cacheCount by vm.cacheCount.collectAsStateWithLifecycle()
+    val themeDark by vm.themeDark.collectAsStateWithLifecycle()
+    val state by vm.state.collectAsStateWithLifecycle()
+    val scanning = state is ScanState.Scanning
     var showClearCacheDialog by remember { mutableStateOf(false) }
+    var showScanWarning by remember { mutableStateOf(false) }
+
+    // Tarama sürerken bir ayar değişince kullanıcıyı uyar.
+    fun onSettingChanged() {
+        if (scanning) showScanWarning = true
+    }
 
     Column(
         modifier = Modifier
@@ -64,57 +74,45 @@ fun SettingsScreen(vm: ScanViewModel) {
         )
         Spacer(Modifier.height(16.dp))
 
-        SettingsCard(title = "Tespit hassasiyeti") {
+        SettingsCard(title = "Görünüm") {
             SettingSwitch(
-                label = "Yalnızca gerçek cuma mesajları",
-                description = "Açıkken bir görselin bulunması için mutlaka \"Hayırlı Cumalar\" " +
-                    "benzeri bir ifade içermesi gerekir. Sadece \"allah/dua\" gibi kelimeler taşıyan " +
-                    "karikatür, selfie vb. elenir. (Önerilir)",
-                checked = settings.requireStrongKeyword,
-                onCheckedChange = vm::setRequireStrongKeyword,
+                label = "Koyu tema",
+                description = "Kapatınca açık tema kullanılır",
+                checked = themeDark,
+                onCheckedChange = { vm.setThemeDark(it) },
             )
+        }
+
+        SettingsCard(title = "Tespit hassasiyeti") {
+            Text(
+                text = "Bir görselin bulunması için her zaman gerçek bir \"Hayırlı Cumalar\" " +
+                    "benzeri ifade içermesi gerekir; yalnızca \"allah/dua\" gibi kelimeler " +
+                    "taşıyan karikatür, selfie vb. otomatik elenir.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
             SettingSlider(
                 label = "Tespit eşiği",
                 description = "Cuma Skoru bu değerin üzerindeki görseller aday sayılır",
                 value = settings.threshold,
                 range = 0f..100f,
-                onCommit = vm::setThreshold,
+                onCommit = { vm.setThreshold(it); onSettingChanged() },
             )
             SettingSlider(
                 label = "Güçlü kelime puanı",
                 description = "\"Hayırlı cumalar\" gibi kesin ifadelerin puanı",
                 value = settings.strongWeight,
                 range = 0f..100f,
-                onCommit = vm::setStrongWeight,
+                onCommit = { vm.setStrongWeight(it); onSettingChanged() },
             )
             SettingSlider(
                 label = "Zayıf kelime puanı",
                 description = "\"dua\", \"amin\" gibi destekleyici kelimelerin puanı (en çok 3 kelime sayılır)",
                 value = settings.weakWeight,
                 range = 0f..30f,
-                onCommit = vm::setWeakWeight,
+                onCommit = { vm.setWeakWeight(it); onSettingChanged() },
             )
-            // Bu bonuslar yalnızca ilgili kapsam filtresi KAPALIYKEN ayırt edici
-            // olduğu için, filtre açıkken gösterilmez (aksi halde herkese aynı
-            // puanı ekler, anlamsız olur).
-            if (!settings.thursdayFridayOnly) {
-                SettingSlider(
-                    label = "Perşembe/Cuma günü bonusu",
-                    description = "Dosya perşembe veya cuma günü oluştuysa eklenen puan",
-                    value = settings.dayBonus,
-                    range = 0f..30f,
-                    onCommit = vm::setDayBonus,
-                )
-            }
-            if (!settings.whatsappOnly) {
-                SettingSlider(
-                    label = "WhatsApp dosya adı bonusu",
-                    description = "IMG-...-WA... adlı dosyalara eklenen puan",
-                    value = settings.nameBonus,
-                    range = 0f..30f,
-                    onCommit = vm::setNameBonus,
-                )
-            }
         }
 
         SettingsCard(title = "Tarama kapsamı") {
@@ -122,21 +120,13 @@ fun SettingsScreen(vm: ScanViewModel) {
                 label = "Sadece WhatsApp görselleri",
                 description = "Kapalıysa galerideki tüm görseller taranır",
                 checked = settings.whatsappOnly,
-                onCheckedChange = vm::setWhatsappOnly,
+                onCheckedChange = { vm.setWhatsappOnly(it); onSettingChanged() },
             )
             SettingSwitch(
                 label = "Sadece perşembe/cuma dosyaları",
                 description = "Diğer günlerde oluşan dosyalar hiç taranmaz (taramayı hızlandırır)",
                 checked = settings.thursdayFridayOnly,
-                onCheckedChange = vm::setThursdayFridayOnly,
-            )
-            SettingSlider(
-                label = "En küçük dosya boyutu (KB)",
-                description = "Bundan küçük dosyalar taranmaz",
-                value = settings.minSizeKb,
-                range = 0f..500f,
-                suffix = " KB",
-                onCommit = vm::setMinSizeKb,
+                onCheckedChange = { vm.setThursdayFridayOnly(it); onSettingChanged() },
             )
         }
 
@@ -148,8 +138,8 @@ fun SettingsScreen(vm: ScanViewModel) {
             )
             KeywordEditor(
                 keywords = settings.strongKeywords,
-                onAdd = vm::addStrongKeyword,
-                onRemove = vm::removeStrongKeyword,
+                onAdd = { vm.addStrongKeyword(it); onSettingChanged() },
+                onRemove = { vm.removeStrongKeyword(it); onSettingChanged() },
             )
         }
 
@@ -161,8 +151,8 @@ fun SettingsScreen(vm: ScanViewModel) {
             )
             KeywordEditor(
                 keywords = settings.weakKeywords,
-                onAdd = vm::addWeakKeyword,
-                onRemove = vm::removeWeakKeyword,
+                onAdd = { vm.addWeakKeyword(it); onSettingChanged() },
+                onRemove = { vm.removeWeakKeyword(it); onSettingChanged() },
             )
         }
 
@@ -222,6 +212,12 @@ fun SettingsScreen(vm: ScanViewModel) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
+                    text = "Yusuf Kılınç · Temmuz 2026",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
                     text = "Görseller cihazından çıkmaz; tüm analiz telefonda yapılır.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -230,6 +226,29 @@ fun SettingsScreen(vm: ScanViewModel) {
         }
 
         Spacer(Modifier.height(24.dp))
+    }
+
+    if (showScanWarning) {
+        AlertDialog(
+            onDismissRequest = { showScanWarning = false },
+            title = { Text("Tarama sürüyor") },
+            text = {
+                Text(
+                    "Bu değişiklik şu an devam eden taramaya uygulanmadı — tarama önceki " +
+                        "ayarlarla sürüyor. Yeni ayarların geçerli olması için taramayı durdurup " +
+                        "yeniden başlatabilirsin."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.cancelScan()
+                    showScanWarning = false
+                }) { Text("Taramayı durdur") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showScanWarning = false }) { Text("Devam etsin") }
+            },
+        )
     }
 
     if (showClearCacheDialog) {

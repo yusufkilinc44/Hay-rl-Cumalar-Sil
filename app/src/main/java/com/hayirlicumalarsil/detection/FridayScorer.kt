@@ -1,9 +1,6 @@
 package com.hayirlicumalarsil.detection
 
 import com.hayirlicumalarsil.data.DetectionSettings
-import java.time.DayOfWeek
-import java.time.Instant
-import java.time.ZoneId
 
 data class ScoreResult(
     val score: Int,
@@ -11,14 +8,16 @@ data class ScoreResult(
 )
 
 /**
- * Saf puanlama mantığı — OCR'dan bağımsızdır, birim testlerle doğrulanır.
+ * Saf, metin-tabanlı puanlama — OCR'dan bağımsızdır, birim testlerle doğrulanır.
  *
- * Puan bileşenleri (hepsi Ayarlar'dan değiştirilebilir):
- *  - İlk güçlü anahtar kelime eşleşmesi: [DetectionSettings.strongWeight] puan,
- *    her ek güçlü eşleşme +10 puan
- *  - Zayıf anahtar kelime eşleşmeleri: her biri [DetectionSettings.weakWeight] puan (en çok 3 adet sayılır)
- *  - Dosya perşembe/cuma günü oluşmuşsa: [DetectionSettings.dayBonus] puan
- *  - WhatsApp dosya adı deseni (IMG-yyyyMMdd-WAxxxx): [DetectionSettings.nameBonus] puan
+ * Kural: bir görselin aday olması için MUTLAKA en az bir güçlü ifade
+ * ("hayırlı cumalar" vb.) içermesi gerekir. Yalnızca zayıf kelime taşıyanlar
+ * (karikatür, sıradan foto vb.) elenir. Gün/dosya-adı bonusu yoktur; WhatsApp ve
+ * perşembe/cuma yalnızca tarama kapsamı filtreleridir.
+ *
+ * Puan:
+ *  - İlk güçlü eşleşme: [DetectionSettings.strongWeight]; her ek güçlü eşleşme +10
+ *  - Zayıf eşleşmeler: her biri [DetectionSettings.weakWeight] (en çok 3 sayılır)
  * Sonuç 0–100 aralığına sıkıştırılır.
  */
 object FridayScorer {
@@ -29,62 +28,34 @@ object FridayScorer {
 
     fun isWhatsappName(fileName: String): Boolean = WHATSAPP_NAME_REGEX.matches(fileName)
 
-    fun score(
-        rawText: String,
-        fileName: String,
-        dateMillis: Long,
-        settings: DetectionSettings,
-    ): ScoreResult {
+    fun score(rawText: String, settings: DetectionSettings): ScoreResult {
         val normalizedText = TextNormalizer.normalize(rawText)
+        if (normalizedText.isBlank()) return ScoreResult(0, emptyList())
+
         val matched = mutableListOf<String>()
-        var score = 0
         var strongCount = 0
-
-        if (normalizedText.isNotBlank()) {
-            for (keyword in settings.strongKeywords) {
-                val needle = TextNormalizer.normalize(keyword)
-                if (needle.isNotBlank() && normalizedText.contains(needle)) {
-                    strongCount++
-                    matched += keyword
-                }
-            }
-            if (strongCount > 0) {
-                score += settings.strongWeight + (strongCount - 1) * EXTRA_STRONG_MATCH_BONUS
-            }
-
-            var weakCount = 0
-            for (keyword in settings.weakKeywords) {
-                val needle = TextNormalizer.normalize(keyword)
-                if (needle.isNotBlank() && containsWord(normalizedText, needle)) {
-                    matched += keyword
-                    if (weakCount < MAX_COUNTED_WEAK_MATCHES) weakCount++
-                }
-            }
-            score += weakCount * settings.weakWeight
-        }
-
-        // Ana kural: gerçek bir "hayırlı cumalar" ifadesi yoksa bu bir cuma
-        // kutlaması değildir (karikatür, selfie vb. elenir). Tarih/dosya adı
-        // bonusları tek başına aday yapamaz.
-        if (settings.requireStrongKeyword && strongCount == 0) {
-            return ScoreResult(0, emptyList())
-        }
-
-        // Gün bonusu yalnızca "sadece perşembe/cuma" filtresi KAPALIYKEN ayırt
-        // edicidir; filtre açıkken zaten hepsi perşembe/cuma olur, uniform katkı
-        // anlamsızdır, o yüzden uygulanmaz.
-        if (!settings.thursdayFridayOnly) {
-            val day = Instant.ofEpochMilli(dateMillis).atZone(ZoneId.systemDefault()).dayOfWeek
-            if (day == DayOfWeek.THURSDAY || day == DayOfWeek.FRIDAY) {
-                score += settings.dayBonus
+        for (keyword in settings.strongKeywords) {
+            val needle = TextNormalizer.normalize(keyword)
+            if (needle.isNotBlank() && normalizedText.contains(needle)) {
+                strongCount++
+                matched += keyword
             }
         }
 
-        // WhatsApp dosya adı bonusu yalnızca "sadece WhatsApp" filtresi KAPALIYKEN
-        // ayırt edicidir; açıkken zaten hepsi WhatsApp'tır.
-        if (!settings.whatsappOnly && WHATSAPP_NAME_REGEX.matches(fileName)) {
-            score += settings.nameBonus
+        // Güçlü ifade yoksa cuma kutlaması değildir → elenir.
+        if (strongCount == 0) return ScoreResult(0, emptyList())
+
+        var score = settings.strongWeight + (strongCount - 1) * EXTRA_STRONG_MATCH_BONUS
+
+        var weakCount = 0
+        for (keyword in settings.weakKeywords) {
+            val needle = TextNormalizer.normalize(keyword)
+            if (needle.isNotBlank() && containsWord(normalizedText, needle)) {
+                matched += keyword
+                if (weakCount < MAX_COUNTED_WEAK_MATCHES) weakCount++
+            }
         }
+        score += weakCount * settings.weakWeight
 
         return ScoreResult(score.coerceIn(0, 100), matched)
     }

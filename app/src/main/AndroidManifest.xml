@@ -36,6 +36,10 @@
             android:name=".scan.ScanService"
             android:exported="false"
             android:foregroundServiceType="mediaProcessing" />
+
+        <receiver
+            android:name=".scan.ReminderReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

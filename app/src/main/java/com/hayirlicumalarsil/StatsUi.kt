@@ -23,6 +23,7 @@ data class StatsUi(
     val largestFileBytes: Long = 0,
     val averageFileBytes: Long = 0,
     val lastScanTimestamp: Long? = null,
+    val firstScanTimestamp: Long? = null,
     val lastScanScanned: Int = 0,
     val lastScanFound: Int = 0,
     /** Son 8 haftanın (etiket, silinen bayt) çiftleri — grafikte kullanılır. */
@@ -68,6 +69,7 @@ fun buildStats(deletes: List<DeleteRecord>, scans: List<ScanRecord>): StatsUi {
         largestFileBytes = largest?.sizeBytes ?: 0,
         averageFileBytes = if (deletes.isEmpty()) 0 else deletes.sumOf { it.sizeBytes } / deletes.size,
         lastScanTimestamp = lastScan?.timestamp,
+        firstScanTimestamp = scans.lastOrNull()?.timestamp,
         lastScanScanned = lastScan?.scannedCount ?: 0,
         lastScanFound = lastScan?.foundCount ?: 0,
         weeklyBytes = weekly,

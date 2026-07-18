@@ -11,11 +11,12 @@ data class Candidate(
     val score: Int,
     val matchedKeywords: List<String>,
     val recognizedText: String,
+    val scannedAt: Long = 0L,
 )
 
 /**
  * Cache'teki bir görsel kaydını güncel ayarlara göre değerlendirir. Önce kapsam
- * filtreleri (WhatsApp/boyut/gün — tarama anıyla aynı mantık), sonra skor eşiği
+ * filtreleri (WhatsApp/gün — tarama anıyla aynı mantık), sonra skor eşiği
  * uygulanır. Uymuyorsa null döner. OCR gerektirmez; saklı ham metni yeniden
  * puanlar, böylece eşik/kelime değişince tüm geçmiş anında yeniden değerlendirilir.
  */
@@ -23,9 +24,9 @@ fun buildCandidate(row: ScannedImageRecord, settings: DetectionSettings): Candid
     // Eski (sütun eklenmeden önce yazılmış) kayıtlarda isWhatsapp=false olabilir;
     // WhatsApp dosya adı desenini de kabul ederek köprü kur.
     val isWhatsapp = row.isWhatsapp || FridayScorer.isWhatsappName(row.name)
-    if (!settings.accepts(isWhatsapp, row.sizeBytes, row.dateMillis)) return null
+    if (!settings.accepts(isWhatsapp, row.dateMillis)) return null
 
-    val result = FridayScorer.score(row.recognizedText, row.name, row.dateMillis, settings)
+    val result = FridayScorer.score(row.recognizedText, settings)
     if (result.score < settings.threshold) return null
     return Candidate(
         image = MediaImage(
@@ -36,9 +37,11 @@ fun buildCandidate(row: ScannedImageRecord, settings: DetectionSettings): Candid
             dateMillis = row.dateMillis,
             path = "",
             dateModifiedMillis = row.dateModifiedMillis,
+            isWhatsapp = isWhatsapp,
         ),
         score = result.score,
         matchedKeywords = result.matchedKeywords,
         recognizedText = row.recognizedText.take(600),
+        scannedAt = row.scannedAt,
     )
 }

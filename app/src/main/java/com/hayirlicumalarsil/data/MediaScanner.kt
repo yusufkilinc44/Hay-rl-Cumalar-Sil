@@ -30,9 +30,8 @@ private fun isThursdayOrFriday(dateMillis: Long): Boolean {
  * tutarlı olsun; eski geniş taramadan kalan, güncel filtreye uymayan kayıtlar
  * sonuçlara sızmaz.
  */
-fun DetectionSettings.accepts(isWhatsapp: Boolean, sizeBytes: Long, dateMillis: Long): Boolean {
+fun DetectionSettings.accepts(isWhatsapp: Boolean, dateMillis: Long): Boolean {
     if (whatsappOnly && !isWhatsapp) return false
-    if (sizeBytes < minSizeKb * 1024L) return false
     if (thursdayFridayOnly && !isThursdayOrFriday(dateMillis)) return false
     return true
 }
@@ -88,7 +87,7 @@ class MediaScanner(private val context: Context) {
                     dateModifiedMillis = c.getLong(modifiedCol),
                     isWhatsapp = isWhatsapp,
                 )
-                if (settings.accepts(image.isWhatsapp, image.sizeBytes, image.dateMillis)) {
+                if (settings.accepts(image.isWhatsapp, image.dateMillis)) {
                     images += image
                 }
             }

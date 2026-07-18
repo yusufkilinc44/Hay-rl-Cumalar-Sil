@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.hayirlicumalarsil.data.DetectionSettings
 import com.hayirlicumalarsil.data.SettingsRepository
+import com.hayirlicumalarsil.data.fingerprint
 import com.hayirlicumalarsil.data.db.AppDatabase
 import com.hayirlicumalarsil.data.db.DeleteRecord
 import com.hayirlicumalarsil.detection.Candidate
@@ -76,18 +77,70 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     val cacheCount = scanCacheDao.countFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    /** Son taramadan bu yana sonucu etkileyen bir ayar değişti mi? */
+    val settingsChangedSinceLastScan = combine(
+        settings,
+        settingsRepo.lastScanFingerprint,
+    ) { s, last -> last != null && last != s.fingerprint() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val themeDark = settingsRepo.themeDark
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /** Sonuçlar ızgarası sütun sayısı; 0 = otomatik. */
+    val gridColumns = settingsRepo.gridColumns
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    /** Sonuçlar ekranı sıralaması. */
+    enum class SortKey { SCORE, DATE }
+
+    private val _sortKey = MutableStateFlow(SortKey.SCORE)
+    val sortKey = _sortKey.asStateFlow()
+    private val _sortAscending = MutableStateFlow(false)
+    val sortAscending = _sortAscending.asStateFlow()
+
+    /** Sonuçlar ekranında gösterilecek minimum skor (yüzde). */
+    private val _minScoreFilter = MutableStateFlow(0)
+    val minScoreFilter = _minScoreFilter.asStateFlow()
+
     private var pendingDelete: List<Candidate> = emptyList()
 
     init {
-        // Silme/eşik değişikliğiyle listeden düşen adayların seçimini temizle.
-        // Otomatik "hepsini seç" işi UI'da Sonuçlar'a girildiğinde yapılır
-        // (kullanıcı: "buraya gidince o an kaç tane varsa hepsi seçilsin").
+        // Silme/eşik değişikliğiyle listeden düşen adayların seçimini temizle
+        // (kullanıcının kalan seçimleri korunur, ekranlar arası kaybolmaz).
         candidates.onEach { list ->
             val ids = list.map { it.image.id }.toSet()
             _selectedIds.value = _selectedIds.value intersect ids
         }.launchIn(viewModelScope)
+
+        // Yeni bir tarama tamamlandığında görünür adayların hepsini seçili yap.
+        var wasScanning = false
+        ScanEngine.state.onEach { s ->
+            if (s is ScanState.Scanning) {
+                wasScanning = true
+            } else if (wasScanning && s is ScanState.Results) {
+                wasScanning = false
+                selectVisible()
+            }
+        }.launchIn(viewModelScope)
     }
 
+    /** Filtreyi geçen (skor >= minScoreFilter) adaylar. */
+    private fun visibleNow(): List<Candidate> =
+        candidates.value.filter { it.score >= _minScoreFilter.value }
+
+    /** Görünür (filtreyi geçen) tüm adayları seçili yapar. */
+    fun selectVisible() {
+        _selectedIds.value = visibleNow().map { it.image.id }.toSet()
+    }
+
+    /** Skor filtresi değişince, görünürlerin tümü otomatik seçilir. */
+    fun setMinScoreFilter(v: Int) {
+        _minScoreFilter.value = v
+        selectVisible()
+    }
+
+    /** Sadece daha önce taranmamış (veya değişmiş) görselleri tarar. */
     fun startScan() {
         if (ScanEngine.isScanning) return
         _localOverlay.value = null
@@ -97,18 +150,29 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    /** Önbelleği temizleyip her görseli baştan tarar (ayarlar değiştiğinde). */
+    fun rescanAll() {
+        if (ScanEngine.isScanning) return
+        viewModelScope.launch {
+            scanCacheDao.clearAll()
+            startScan()
+        }
+    }
+
     fun cancelScan() {
         ScanEngine.cancel()
     }
+
+    fun setSortKey(key: SortKey) { _sortKey.value = key }
+    fun toggleSortDirection() { _sortAscending.value = !_sortAscending.value }
 
     fun toggleSelection(id: Long) {
         _selectedIds.value =
             if (id in _selectedIds.value) _selectedIds.value - id else _selectedIds.value + id
     }
 
-    fun selectAll() {
-        _selectedIds.value = candidates.value.map { it.image.id }.toSet()
-    }
+    /** "Tümü" = filtreyi geçen görünür adayların tümü. */
+    fun selectAll() = selectVisible()
 
     fun clearSelection() {
         _selectedIds.value = emptySet()
@@ -116,6 +180,9 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
     fun selectedCandidates(): List<Candidate> =
         candidates.value.filter { it.image.id in _selectedIds.value }
+
+    fun setThemeDark(v: Boolean) = launchSetting { settingsRepo.setThemeDark(v) }
+    fun setGridColumns(v: Int) = launchSetting { settingsRepo.setGridColumns(v) }
 
     /** Önbelleği temizler; sonraki tarama her görseli baştan OCR'lar. */
     fun clearScanCache() {
@@ -189,12 +256,8 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     fun setThreshold(v: Int) = launchSetting { settingsRepo.setThreshold(v) }
     fun setStrongWeight(v: Int) = launchSetting { settingsRepo.setStrongWeight(v) }
     fun setWeakWeight(v: Int) = launchSetting { settingsRepo.setWeakWeight(v) }
-    fun setDayBonus(v: Int) = launchSetting { settingsRepo.setDayBonus(v) }
-    fun setNameBonus(v: Int) = launchSetting { settingsRepo.setNameBonus(v) }
-    fun setMinSizeKb(v: Int) = launchSetting { settingsRepo.setMinSizeKb(v) }
     fun setWhatsappOnly(v: Boolean) = launchSetting { settingsRepo.setWhatsappOnly(v) }
     fun setThursdayFridayOnly(v: Boolean) = launchSetting { settingsRepo.setThursdayFridayOnly(v) }
-    fun setRequireStrongKeyword(v: Boolean) = launchSetting { settingsRepo.setRequireStrongKeyword(v) }
     fun addStrongKeyword(word: String) = launchSetting { settingsRepo.addStrongKeyword(word) }
     fun removeStrongKeyword(word: String) = launchSetting { settingsRepo.removeStrongKeyword(word) }
     fun addWeakKeyword(word: String) = launchSetting { settingsRepo.addWeakKeyword(word) }

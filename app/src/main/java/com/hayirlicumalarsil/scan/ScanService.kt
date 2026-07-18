@@ -71,9 +71,12 @@ class ScanService : LifecycleService() {
 
     private fun buildNotification(scanned: Int, total: Int, found: Int) =
         NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Görseller taranıyor")
+            .setContentTitle(
+                if (total > 0) "Taranıyor: $scanned / $total görsel"
+                else "Görseller taranıyor"
+            )
             .setContentText(
-                if (total > 0) "$scanned / $total tarandı • $found aday bulundu"
+                if (total > 0) "$found cuma görseli adayı bulundu"
                 else "Görseller listeleniyor…"
             )
             .setSmallIcon(R.drawable.ic_scan)

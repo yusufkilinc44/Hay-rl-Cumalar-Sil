@@ -3,6 +3,7 @@ package com.hayirlicumalarsil.scan
 import android.content.Context
 import com.hayirlicumalarsil.data.MediaScanner
 import com.hayirlicumalarsil.data.SettingsRepository
+import com.hayirlicumalarsil.data.fingerprint
 import com.hayirlicumalarsil.data.db.AppDatabase
 import com.hayirlicumalarsil.data.db.ScanRecord
 import com.hayirlicumalarsil.data.db.ScannedImageRecord
@@ -12,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,7 +47,12 @@ object ScanEngine {
         job = scope.launch {
             val db = AppDatabase.get(appContext)
             val cacheDao = db.scanCacheDao()
-            val settings = SettingsRepository(appContext).settings.first()
+            val settingsRepo = SettingsRepository(appContext)
+            val settings = settingsRepo.settings.first()
+
+            // Bu taramanın hangi ayarlarla yapıldığını kaydet; "ayarlar değişti mi"
+            // uyarısı bununla karşılaştırılır.
+            settingsRepo.setLastScanFingerprint(settings.fingerprint())
 
             val images = withContext(Dispatchers.IO) { MediaScanner(appContext).loadImages(settings) }
             val cached = withContext(Dispatchers.IO) { cacheDao.allOnce() }.associateBy { it.mediaId }
@@ -78,10 +85,18 @@ object ScanEngine {
                     recognized
                 }
 
-                if (FridayScorer.score(text, image.name, image.dateMillis, settings).score >= settings.threshold) {
+                if (FridayScorer.score(text, settings).score >= settings.threshold) {
                     found++
                 }
                 _state.value = ScanState.Scanning(index + 1, images.size, found)
+
+                // CPU'yu sürekli %100'de tutmayıp kısa nefes aralıkları bırak:
+                // Samsung "Cihaz bakımı" gibi pil yöneticilerinin "çok kaynak
+                // kullanıyor" uyarısını tetiklemesini azaltır. Yalnızca gerçekten
+                // OCR yapıldığında (yeni görsel) beklenir; cache'ten okunuyorsa hızlı geçer.
+                if (existing == null || existing.dateModifiedMillis != image.dateModifiedMillis) {
+                    delay(8)
+                }
             }
 
             db.historyDao().insertScan(

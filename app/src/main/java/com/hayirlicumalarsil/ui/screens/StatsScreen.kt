@@ -59,7 +59,7 @@ fun StatsScreen(vm: ScanViewModel) {
                 modifier = Modifier.weight(1f),
             )
             StatCard(
-                icon = R.drawable.ic_savings,
+                icon = R.drawable.ic_storage,
                 value = formatBytes(stats.totalBytesFreed),
                 label = "Toplam kazanılan alan",
                 container = MaterialTheme.colorScheme.tertiaryContainer,
@@ -100,24 +100,6 @@ fun StatsScreen(vm: ScanViewModel) {
                 label = "Bu ay silinen",
                 container = MaterialTheme.colorScheme.secondaryContainer,
                 content = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        StatRow {
-            StatCard(
-                emoji = "⚖️",
-                value = formatBytes(stats.averageFileBytes),
-                label = "Ortalama görsel boyutu",
-                container = MaterialTheme.colorScheme.tertiaryContainer,
-                content = MaterialTheme.colorScheme.onTertiaryContainer,
-                modifier = Modifier.weight(1f),
-            )
-            StatCard(
-                icon = R.drawable.ic_bar_chart,
-                value = formatBytes(stats.largestFileBytes),
-                label = stats.largestFileName?.let { "En büyük: $it" } ?: "En büyük silinen dosya",
-                container = MaterialTheme.colorScheme.surfaceVariant,
-                content = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
         }

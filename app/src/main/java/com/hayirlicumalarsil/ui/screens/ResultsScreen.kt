@@ -8,7 +8,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,16 +16,21 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -35,16 +39,20 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,19 +70,25 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.hayirlicumalarsil.R
 import com.hayirlicumalarsil.ScanViewModel
-import com.hayirlicumalarsil.scan.ScanState
 import com.hayirlicumalarsil.detection.Candidate
 import com.hayirlicumalarsil.formatBytes
+import com.hayirlicumalarsil.scan.ScanState
 import com.hayirlicumalarsil.ui.components.ConfettiOverlay
 import com.hayirlicumalarsil.ui.components.ScoreBadge
 import com.hayirlicumalarsil.ui.theme.HeroGradient
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @Composable
 fun ResultsScreen(vm: ScanViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
     val selectedIds by vm.selectedIds.collectAsStateWithLifecycle()
-    val candidates by vm.candidates.collectAsStateWithLifecycle()
-    var detailCandidate by remember { mutableStateOf<Candidate?>(null) }
+    val allCandidates by vm.candidates.collectAsStateWithLifecycle()
+    val sortKey by vm.sortKey.collectAsStateWithLifecycle()
+    val sortAscending by vm.sortAscending.collectAsStateWithLifecycle()
+    val minScore by vm.minScoreFilter.collectAsStateWithLifecycle()
+    val gridColumns by vm.gridColumns.collectAsStateWithLifecycle()
+    var previewIndex by remember { mutableStateOf<Int?>(null) }
 
     val deleteLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
@@ -89,30 +103,40 @@ fun ResultsScreen(vm: ScanViewModel) {
         return
     }
 
-    if (candidates.isEmpty()) {
+    if (allCandidates.isEmpty()) {
         EmptyResults()
         return
     }
 
-    val selectedCandidates = candidates.filter { it.image.id in selectedIds }
-    val selectedBytes = selectedCandidates.sumOf { it.image.sizeBytes }
+    // Filtre + sıralama uygulanmış görünür liste.
+    val visible = remember(allCandidates, sortKey, sortAscending, minScore) {
+        val filtered = allCandidates.filter { it.score >= minScore }
+        val sorted = when (sortKey) {
+            ScanViewModel.SortKey.SCORE -> filtered.sortedBy { it.score }
+            ScanViewModel.SortKey.DATE -> filtered.sortedBy { it.image.dateMillis }
+        }
+        if (sortAscending) sorted else sorted.reversed()
+    }
+
+    val selectedVisible = visible.filter { it.image.id in selectedIds }
+    val selectedBytes = selectedVisible.sumOf { it.image.sizeBytes }
 
     Column(Modifier.fillMaxSize()) {
-        // Başlık ve seçim kısayolları
+        // Başlık
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "${candidates.size} görsel bulundu",
+                    text = "${visible.size} görsel",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold,
                 )
                 Text(
-                    text = "${selectedCandidates.size} seçili • ${formatBytes(selectedBytes)}",
+                    text = "${selectedVisible.size} seçili • ${formatBytes(selectedBytes)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -121,31 +145,44 @@ fun ResultsScreen(vm: ScanViewModel) {
             TextButton(onClick = vm::clearSelection) { Text("Hiçbiri") }
         }
 
+        ControlsBar(
+            sortKey = sortKey,
+            sortAscending = sortAscending,
+            onSortKey = vm::setSortKey,
+            onToggleDir = vm::toggleSortDirection,
+            minScore = minScore,
+            onMinScore = vm::setMinScoreFilter,
+            gridColumns = gridColumns,
+            onGridColumns = vm::setGridColumns,
+        )
+
+        val cells = if (gridColumns in 1..5) GridCells.Fixed(gridColumns)
+        else GridCells.Adaptive(minSize = 110.dp)
+
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 110.dp),
+            columns = cells,
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(candidates, key = { it.image.id }) { candidate ->
+            itemsIndexed(visible, key = { _, c -> c.image.id }) { idx, candidate ->
                 CandidateCell(
                     candidate = candidate,
                     selected = candidate.image.id in selectedIds,
                     onToggle = { vm.toggleSelection(candidate.image.id) },
-                    onDetail = { detailCandidate = candidate },
+                    onPreview = { previewIndex = idx },
                 )
             }
         }
 
-        // Silme çubuğu
         Button(
             onClick = {
                 vm.requestDelete { sender ->
                     deleteLauncher.launch(IntentSenderRequest.Builder(sender).build())
                 }
             },
-            enabled = selectedCandidates.isNotEmpty(),
+            enabled = selectedVisible.isNotEmpty(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 12.dp)
@@ -158,21 +195,106 @@ fun ResultsScreen(vm: ScanViewModel) {
             Icon(painterResource(R.drawable.ic_delete), contentDescription = null)
             Spacer(Modifier.size(8.dp))
             Text(
-                text = if (selectedCandidates.isEmpty()) "Silinecek görsel seç"
-                else "${selectedCandidates.size} görseli sil • ${formatBytes(selectedBytes)}",
+                text = if (selectedVisible.isEmpty()) "Silinecek görsel seç"
+                else "${selectedVisible.size} görseli sil • ${formatBytes(selectedBytes)}",
                 fontWeight = FontWeight.Bold,
             )
         }
     }
 
-    detailCandidate?.let { candidate ->
-        CandidatePreviewDialog(
-            candidate = candidate,
-            selected = candidate.image.id in selectedIds,
-            onToggle = { vm.toggleSelection(candidate.image.id) },
-            onDismiss = { detailCandidate = null },
+    previewIndex?.let { start ->
+        CandidatePreviewPager(
+            candidates = visible,
+            startIndex = start.coerceIn(0, (visible.size - 1).coerceAtLeast(0)),
+            selectedIds = selectedIds,
+            onToggle = { vm.toggleSelection(it) },
+            onDismiss = { previewIndex = null },
         )
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ControlsBar(
+    sortKey: ScanViewModel.SortKey,
+    sortAscending: Boolean,
+    onSortKey: (ScanViewModel.SortKey) -> Unit,
+    onToggleDir: () -> Unit,
+    minScore: Int,
+    onMinScore: (Int) -> Unit,
+    gridColumns: Int,
+    onGridColumns: (Int) -> Unit,
+) {
+    var localScore by remember(minScore) { mutableIntStateOf(minScore) }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            // Sıralama
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Sırala", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.size(8.dp))
+                FilterChip(
+                    selected = sortKey == ScanViewModel.SortKey.SCORE,
+                    onClick = { onSortKey(ScanViewModel.SortKey.SCORE) },
+                    label = { Text("Puan") },
+                )
+                Spacer(Modifier.size(6.dp))
+                FilterChip(
+                    selected = sortKey == ScanViewModel.SortKey.DATE,
+                    onClick = { onSortKey(ScanViewModel.SortKey.DATE) },
+                    label = { Text("Tarih") },
+                )
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onToggleDir) {
+                    Text(
+                        text = if (sortAscending) "↑" else "↓",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+
+            // Sütun sayısı
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Sütun", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.size(8.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ColumnChip("Oto", gridColumns == 0) { onGridColumns(0) }
+                    (1..5).forEach { n ->
+                        ColumnChip(n.toString(), gridColumns == n) { onGridColumns(n) }
+                    }
+                }
+            }
+
+            // Skor filtresi
+            Text(
+                text = "En düşük skor: %$localScore",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Slider(
+                value = localScore.toFloat(),
+                onValueChange = { localScore = it.roundToInt() },
+                onValueChangeFinished = { onMinScore(localScore) },
+                valueRange = 0f..100f,
+            )
+            Text(
+                text = "Bu değerin üstündekiler gösterilir ve otomatik seçilir; sil dediğinde yalnız bunlar silinir.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ColumnChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -181,7 +303,7 @@ private fun CandidateCell(
     candidate: Candidate,
     selected: Boolean,
     onToggle: () -> Unit,
-    onDetail: () -> Unit,
+    onPreview: () -> Unit,
 ) {
     val shape = MaterialTheme.shapes.large
     Box(
@@ -192,8 +314,8 @@ private fun CandidateCell(
                 if (selected) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, shape)
                 else Modifier
             )
-            // Dokunma = büyük önizleme; uzun basma = seçimi değiştir.
-            .combinedClickable(onClick = onDetail, onLongClick = onToggle),
+            // Fotoğrafa dokunmak seçimi açar/kapatır.
+            .clickable(onClick = onToggle),
     ) {
         AsyncImage(
             model = candidate.image.uri,
@@ -207,68 +329,70 @@ private fun CandidateCell(
                 .align(Alignment.TopStart)
                 .padding(6.dp),
         )
-        // Köşedeki işaret kutucuğu doğrudan seçimi açıp kapatır.
-        Icon(
-            painter = painterResource(
-                if (selected) R.drawable.ic_check_circle else R.drawable.ic_radio_unchecked
-            ),
-            contentDescription = if (selected) "Seçili" else "Seçili değil",
-            tint = if (selected) MaterialTheme.colorScheme.primary else Color.White,
+        // Seçili göstergesi (yalnız gösterge, dokunma tüm karttan yapılır).
+        if (selected) {
+            Icon(
+                painter = painterResource(R.drawable.ic_check_circle),
+                contentDescription = "Seçili",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(Color.White),
+            )
+        }
+        // Büyütme (önizleme) butonu.
+        IconButton(
+            onClick = onPreview,
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(6.dp)
-                .size(28.dp)
+                .align(Alignment.BottomEnd)
+                .padding(4.dp)
+                .size(32.dp)
                 .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.35f))
-                .clickable(onClick = onToggle)
-                .padding(2.dp),
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))
-                    )
-                )
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .background(Color.Black.copy(alpha = 0.45f)),
         ) {
-            Text(
-                text = formatBytes(candidate.image.sizeBytes),
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White,
+            Icon(
+                painter = painterResource(R.drawable.ic_scan),
+                contentDescription = "Önizle",
+                tint = Color.White,
+                modifier = Modifier.size(18.dp),
             )
         }
     }
 }
 
-/**
- * Görselin tam ekran (neredeyse tüm ekranı kaplayan) önizlemesi; doğru görseli
- * seçtiğini teyit etmek için. Skor, eşleşen kelimeler ve okunan metin de gösterilir;
- * alttan doğrudan seç/kaldır yapılabilir.
- */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-private fun CandidatePreviewDialog(
-    candidate: Candidate,
-    selected: Boolean,
-    onToggle: () -> Unit,
+private fun CandidatePreviewPager(
+    candidates: List<Candidate>,
+    startIndex: Int,
+    selectedIds: Set<Long>,
+    onToggle: (Long) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    if (candidates.isEmpty()) return
+    val pagerState = rememberPagerState(initialPage = startIndex) { candidates.size }
+    val scope = rememberCoroutineScope()
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.fillMaxSize(),
+            color = Color.Black.copy(alpha = 0.96f),
         ) {
-            Column(Modifier.fillMaxSize()) {
-                // Üst çubuk: dosya adı + kapat
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    // Sistem çubuklarının (üst durum + alt gezinme tuşları) altında
+                    // kalmasın diye insets kadar boşluk bırak.
+                    .windowInsetsPadding(WindowInsets.systemBars),
+            ) {
+                val current = candidates[pagerState.currentPage.coerceIn(0, candidates.size - 1)]
+                // Üst çubuk
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -276,74 +400,71 @@ private fun CandidatePreviewDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = candidate.image.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
+                        text = "${pagerState.currentPage + 1} / ${candidates.size}  •  ${current.image.name}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White,
                         maxLines = 1,
                         modifier = Modifier.weight(1f),
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(painterResource(R.drawable.ic_close), contentDescription = "Kapat")
+                        Icon(painterResource(R.drawable.ic_close), contentDescription = "Kapat", tint = Color.White)
                     }
                 }
 
-                // Büyük görsel — ekranın çoğunu kaplar
-                AsyncImage(
-                    model = candidate.image.uri,
-                    contentDescription = candidate.image.name,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .background(Color.Black)
-                        .clip(MaterialTheme.shapes.medium),
-                )
+                // Kaydırmalı büyük görsel + oklar
+                Box(Modifier.fillMaxWidth().weight(1f)) {
+                    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                        AsyncImage(
+                            model = candidates[page].image.uri,
+                            contentDescription = candidates[page].image.name,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    if (pagerState.currentPage > 0) {
+                        NavArrow("‹", Modifier.align(Alignment.CenterStart)) {
+                            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                        }
+                    }
+                    if (pagerState.currentPage < candidates.size - 1) {
+                        NavArrow("›", Modifier.align(Alignment.CenterEnd)) {
+                            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                        }
+                    }
+                }
 
-                // Alt bilgi + seçim butonu
+                // Alt bilgi + seçim
+                val selected = current.image.id in selectedIds
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 220.dp)
-                        .verticalScroll(rememberScrollState())
                         .padding(16.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        ScoreBadge(score = candidate.score)
+                        ScoreBadge(score = current.score)
                         Spacer(Modifier.size(8.dp))
                         Text(
-                            text = "Cuma Skoru • ${formatBytes(candidate.image.sizeBytes)}",
+                            text = formatBytes(current.image.sizeBytes),
                             style = MaterialTheme.typography.bodySmall,
+                            color = Color.White,
                         )
                     }
-                    if (candidate.matchedKeywords.isNotEmpty()) {
-                        Spacer(Modifier.height(8.dp))
+                    if (current.matchedKeywords.isNotEmpty()) {
+                        Spacer(Modifier.height(6.dp))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            candidate.matchedKeywords.forEach { keyword ->
-                                AssistChip(onClick = {}, label = { Text(keyword) })
+                            current.matchedKeywords.take(6).forEach { kw ->
+                                AssistChip(onClick = {}, label = { Text(kw) })
                             }
                         }
                     }
-                    if (candidate.recognizedText.isNotBlank()) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Okunan metin:",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            text = candidate.recognizedText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(10.dp))
                     Button(
-                        onClick = onToggle,
+                        onClick = { onToggle(current.image.id) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = if (selected) {
                             ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError,
                             )
                         } else {
                             ButtonDefaults.buttonColors()
@@ -356,11 +477,25 @@ private fun CandidatePreviewDialog(
                             contentDescription = null,
                         )
                         Spacer(Modifier.size(8.dp))
-                        Text(if (selected) "Silinecekler listesinde ✓" else "Silinecekler listesine ekle")
+                        Text(if (selected) "Silinecekler listesinde ✓ (çıkar)" else "Silinecekler listesine ekle")
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NavArrow(symbol: String, modifier: Modifier, onClick: () -> Unit) {
+    IconButton(
+        onClick = onClick,
+        modifier = modifier
+            .padding(8.dp)
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.4f)),
+    ) {
+        Text(symbol, color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
     }
 }
 
