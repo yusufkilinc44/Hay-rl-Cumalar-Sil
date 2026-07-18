@@ -42,6 +42,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hayirlicumalarsil.scan.ReminderScheduler
 import com.hayirlicumalarsil.scan.ScanState
 import com.hayirlicumalarsil.ui.screens.HomeScreen
+import com.hayirlicumalarsil.ui.screens.OnboardingScreen
 import com.hayirlicumalarsil.ui.screens.ResultsScreen
 import com.hayirlicumalarsil.ui.screens.SettingsScreen
 import com.hayirlicumalarsil.ui.screens.StatsScreen
@@ -61,8 +62,17 @@ class MainActivity : ComponentActivity() {
         setContent {
             val vm: ScanViewModel = viewModel()
             val dark by vm.themeDark.collectAsStateWithLifecycle()
+            val onboardingDone by vm.onboardingDone.collectAsStateWithLifecycle()
             HcsTheme(darkTheme = dark) {
-                MainScreen(vm = vm, autoScan = autoScanRequested, onAutoScanHandled = { autoScanRequested = false })
+                if (!onboardingDone) {
+                    OnboardingScreen(onDone = { vm.completeOnboarding() })
+                } else {
+                    MainScreen(
+                        vm = vm,
+                        autoScan = autoScanRequested,
+                        onAutoScanHandled = { autoScanRequested = false },
+                    )
+                }
             }
         }
     }

@@ -87,6 +87,11 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     val themeDark = settingsRepo.themeDark
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    val onboardingDone = settingsRepo.onboardingDone
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    fun completeOnboarding() = launchSetting { settingsRepo.setOnboardingDone() }
+
     /** Sonuçlar ızgarası sütun sayısı; 0 = otomatik. */
     val gridColumns = settingsRepo.gridColumns
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)

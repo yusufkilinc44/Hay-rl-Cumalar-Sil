@@ -74,6 +74,14 @@ class SettingsRepository(private val context: Context) {
         val LAST_SCAN_FINGERPRINT = stringPreferencesKey("last_scan_fingerprint")
         val THEME_DARK = booleanPreferencesKey("theme_dark")
         val GRID_COLUMNS = intPreferencesKey("grid_columns")
+        val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
+    }
+
+    /** Tanıtım (ilk açılış) ekranı gösterildi mi? */
+    val onboardingDone: Flow<Boolean> = context.dataStore.data.map { it[Keys.ONBOARDING_DONE] ?: false }
+
+    suspend fun setOnboardingDone() {
+        context.dataStore.edit { it[Keys.ONBOARDING_DONE] = true }
     }
 
     /** Koyu tema mı? Varsayılan: koyu (true). */

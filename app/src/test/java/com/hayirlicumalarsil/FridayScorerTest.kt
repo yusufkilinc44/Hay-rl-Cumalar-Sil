@@ -67,11 +67,11 @@ class FridayScorerTest {
 
     @Test
     fun `birden fazla guclu eslesme ek puan getirir`() {
+        // İki güçlü ifade, zayıf kelime yok: 70 + 10 = 80.
         val result = FridayScorer.score(
-            rawText = "hayırlı cumalar mübarek cumalar",
+            rawText = "hayırlı cumalar hayırlı kandiller",
             settings = settings,
         )
-        // iki güçlü eşleşme: 70 + 10 = 80
         assertEquals(80, result.score)
     }
 
